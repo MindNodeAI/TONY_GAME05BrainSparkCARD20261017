@@ -1,0 +1,2255 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BrainSpark AI 智創記憶翻牌 | TonyStudio</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background: radial-gradient(circle at top, #0f172a 0%, #020617 100%);
+      min-height: 100vh;
+      user-select: none;
+    }
+
+    /* 3D 翻牌核心樣式 */
+    .perspective-1000 {
+      perspective: 1000px;
+    }
+
+    .card-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transition: transform 0.55s cubic-bezier(0.4, 0.2, 0.2, 1);
+      transform-style: preserve-3d;
+    }
+
+    .card.flipped .card-inner,
+    .card.matched .card-inner {
+      transform: rotateY(180deg);
+    }
+
+    .card-front, .card-back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      border-radius: 0.85rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 牌背設計 */
+    .card-back {
+      background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 50%, #2563eb 100%);
+      border: 2px solid rgba(147, 197, 253, 0.25);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .card:hover .card-back {
+      border-color: rgba(147, 197, 253, 0.65);
+    }
+    .card-back::after {
+      content: "✦";
+      font-size: 1.75rem;
+      color: rgba(255, 255, 255, 0.35);
+    }
+
+    /* 牌面設計 */
+    .card-front {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border: 2px solid #38bdf8;
+      transform: rotateY(180deg);
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.25);
+    }
+
+    /* 概念卡(B卡)專屬邊框色，方便區分名詞與解釋 */
+    .card-front.concept-b {
+      border-color: #a855f7;
+      background: linear-gradient(135deg, #2e1065 0%, #0f172a 100%);
+    }
+
+    /* 配對成功特效 */
+    .card.matched .card-front {
+      background: linear-gradient(135deg, #065f46 0%, #064e3b 100%) !important;
+      border-color: #34d399 !important;
+      animation: pulse-match 0.6s ease-out;
+    }
+
+    @keyframes pulse-match {
+      0% { transform: rotateY(180deg) scale(1); }
+      50% { transform: rotateY(180deg) scale(1.06); box-shadow: 0 0 25px rgba(52, 211, 153, 0.7); }
+      100% { transform: rotateY(180deg) scale(1); }
+    }
+
+    /* 自訂捲軸 */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+
+    .saas-glass {
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+  </style>
+</head>
+<body class="text-slate-100 flex flex-col justify-between p-3 md:p-6">
+
+  <!-- 頂部會員狀態與管理後台入口列 (登入後顯示) -->
+  <div id="saasUserTopBar" class="hidden max-w-5xl w-full mx-auto mb-2.5 bg-slate-900/95 border border-slate-700/80 rounded-2xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 shadow-lg z-30">
+    <div class="flex items-center gap-2.5 text-xs">
+      <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+      <span class="text-slate-400">登入會員：</span>
+      <span id="navUserName" class="font-bold text-white">--</span>
+      <span id="navUserIdentityBadge" class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">--</span>
+      <span id="navUserRoleBadge" class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-800 text-slate-300 border border-slate-700">USER</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <button id="openMyHistoryBtn" class="text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 transition">
+        📜 我的過關紀錄
+      </button>
+      <button id="openAdminDashboardBtn" class="hidden text-xs font-bold px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 shadow-lg shadow-amber-500/20 transition flex items-center gap-1">
+        👑 進入管理後台
+      </button>
+      <button id="logoutBtn" class="text-xs font-bold px-3 py-1.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 text-rose-200 border border-rose-700/50 transition">
+        登出
+      </button>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- 會員登入與註冊閘門 (Auth Gate) -->
+  <!-- ========================================== -->
+  <div id="authGateOverlay" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-xl">
+    <div class="max-w-md w-full saas-glass border border-slate-700/80 rounded-3xl p-6 md:p-8 shadow-2xl my-auto">
+      <!-- 品牌頭部 -->
+      <div class="text-center mb-6">
+        <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center text-3xl mx-auto mb-3 shadow-lg shadow-blue-500/30">
+          🧠
+        </div>
+        <h2 class="text-2xl font-black bg-gradient-to-r from-blue-400 via-cyan-300 to-emerald-400 bg-clip-text text-transparent">
+          BrainSpark AI 智創記憶翻牌
+        </h2>
+        <p class="text-xs text-slate-400 mt-1">TONY STUDIO 全端 SaaS 雲端會員認證系統</p>
+      </div>
+
+      <!-- 訊息提示框 (紅字警告 / 綠字提示) -->
+      <div id="authAlertBox" class="hidden mb-4 p-3.5 rounded-2xl text-xs leading-relaxed font-medium border"></div>
+
+      <!-- 溫馨提醒：垃圾郵件匣提示 (首次註冊與忘記密碼時強化顯示) -->
+      <div id="spamReminderBanner" class="mb-4 p-3 rounded-2xl bg-amber-500/10 border border-amber-400/30 flex items-start gap-2.5 text-left">
+        <span class="text-base mt-0.5">📬</span>
+        <div class="text-[11px] text-amber-200/90 leading-relaxed">
+          <strong class="text-amber-300 font-bold">溫馨提醒：</strong>註冊確認信或密碼重設信有時會跑到<span class="underline font-bold text-amber-300">「垃圾郵件匣」</span>或「促銷內容匣」，請記得前往確認並點擊驗證連結唷！
+        </div>
+      </div>
+
+      <!-- 切換頁籤 -->
+      <div class="grid grid-cols-2 gap-1.5 bg-slate-950 p-1.5 rounded-2xl border border-slate-800 mb-5" id="authTabs">
+        <button type="button" id="tabLoginBtn" class="py-2 rounded-xl text-xs font-bold bg-blue-600 text-white shadow transition">
+          🔑 會員登入
+        </button>
+        <button type="button" id="tabRegisterBtn" class="py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white transition">
+          ✨ 註冊新帳號
+        </button>
+      </div>
+
+      <!-- 1. 登入表單 -->
+      <form id="loginForm" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-1">電子郵件 (Email)</label>
+          <input type="email" id="loginEmail" required placeholder="name@example.com"
+            class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500">
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-xs font-bold text-slate-300">登入密碼</label>
+            <button type="button" id="showForgotModalBtn" class="text-[11px] text-cyan-400 hover:text-cyan-300 underline">
+              忘記密碼？
+            </button>
+          </div>
+          <div class="relative">
+            <input type="password" id="loginPassword" required placeholder="請輸入密碼"
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 pr-9">
+            <button type="button" data-toggle-pass="loginPassword" class="pass-eye-btn absolute right-3 top-2.5 text-slate-400 hover:text-white text-xs" title="顯示/隱藏密碼">
+              👁️
+            </button>
+          </div>
+        </div>
+
+        <!-- 若信箱未驗證，提供一鍵重寄驗證信按鈕 -->
+        <div id="resendVerifyWrap" class="hidden pt-1">
+          <button type="button" id="resendVerifyBtn" class="w-full py-2 rounded-xl text-xs font-bold bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/40 transition">
+            📧 重新發送驗證信至上述信箱
+          </button>
+        </div>
+
+        <button type="submit" id="loginSubmitBtn" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg shadow-blue-600/30 transition">
+          立即登入系統
+        </button>
+      </form>
+
+      <!-- 2. 註冊表單 -->
+      <form id="registerForm" class="hidden space-y-3.5">
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-1">真實姓名 <span class="text-rose-400">*</span></label>
+          <input type="text" id="regRealName" required placeholder="請輸入您的真實姓名（如：王小明）"
+            class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-1">學員身分選擇 <span class="text-rose-400">*</span></label>
+          <select id="regIdentity" required
+            class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500">
+            <option value="TONY老師學員">🎓 TONY老師學員</option>
+            <option value="非學員(一般訪客)">👤 非學員(一般訪客)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-1">電子郵件 (Email) <span class="text-rose-400">*</span></label>
+          <input type="email" id="regEmail" required placeholder="請輸入常用信箱以接收驗證信"
+            class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-1">設定密碼 (至少 6 碼) <span class="text-rose-400">*</span></label>
+          <div class="relative">
+            <input type="password" id="regPassword" required minlength="6" placeholder="請設定 6 位數以上密碼"
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 pr-9">
+            <button type="button" data-toggle-pass="regPassword" class="pass-eye-btn absolute right-3 top-2.5 text-slate-400 hover:text-white text-xs" title="顯示/隱藏密碼">
+              👁️
+            </button>
+          </div>
+        </div>
+        <button type="submit" id="regSubmitBtn" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg shadow-emerald-600/30 transition">
+          註冊並發送驗證信
+        </button>
+      </form>
+
+      <!-- 3. 忘記密碼表單 -->
+      <form id="forgotForm" class="hidden space-y-3.5">
+        <div class="p-3 rounded-xl bg-slate-950/90 border border-slate-800 text-xs text-slate-300">
+          請輸入您註冊時的電子郵件，系統將寄送密碼重設連結給您。
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-1">註冊信箱 (Email)</label>
+          <input type="email" id="forgotEmail" required placeholder="name@example.com"
+            class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500">
+        </div>
+        <div class="flex gap-2">
+          <button type="button" id="backToLoginBtn" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition">
+            返回登入
+          </button>
+          <button type="submit" id="forgotSubmitBtn" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2.5 rounded-xl text-xs transition">
+            寄送重設密碼信
+          </button>
+        </div>
+      </form>
+
+      <!-- 分隔線與 Google 多元登入 -->
+      <div class="relative my-5 flex items-center justify-center">
+        <div class="border-t border-slate-800 w-full"></div>
+        <span class="bg-slate-900 px-3 text-[11px] text-slate-400 whitespace-nowrap">或使用多元快速登入</span>
+        <div class="border-t border-slate-800 w-full"></div>
+      </div>
+
+      <!-- Google 首次登入身分選擇預設欄 -->
+      <div class="mb-2.5 flex items-center justify-between gap-2 bg-slate-950/70 px-3 py-2 rounded-xl border border-slate-800/80">
+        <span class="text-[11px] text-slate-400">Google 首次登入身分：</span>
+        <select id="googleDefaultIdentity" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-cyan-300 focus:outline-none">
+          <option value="TONY老師學員">🎓 TONY老師學員</option>
+          <option value="非學員(一般訪客)">👤 非學員(一般訪客)</option>
+        </select>
+      </div>
+
+      <button type="button" id="googleLoginBtn" class="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg transition">
+        <svg class="w-4 h-4" viewBox="0 0 24 24">
+          <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.8C6.2 7.2 8.9 5 12 5z"/>
+          <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.6l3.7 2.9c2.2-2 3.7-5 3.7-8.7z"/>
+          <path fill="#FBBC05" d="M5.3 14.8c-.2-.8-.4-1.6-.4-2.5s.2-1.7.4-2.5L1.6 7C.6 9 0 11.2 0 13.5s.6 4.5 1.6 6.5l3.7-2.9z"/>
+          <path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.1-6.7-5l-3.7 2.8C3.5 21.4 7.4 24 12 24z"/>
+        </svg>
+        使用 Google 帳號安全登入 / 註冊
+      </button>
+
+      <p class="text-[11px] text-center text-slate-500 mt-5">
+        @2020 TonyStudio 由TONY 楊文澤 老師設計創作
+      </p>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- 專屬管理者後台 (Admin Dashboard Modal) -->
+  <!-- ========================================== -->
+  <div id="adminDashboardModal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md hidden items-center justify-center p-3 md:p-6 overflow-y-auto">
+    <div class="bg-slate-900 border border-amber-500/40 rounded-3xl max-w-6xl w-full p-5 md:p-6 shadow-2xl my-auto max-h-[92vh] flex flex-col justify-between">
+      <!-- 後台頂部標題與操作按鈕 -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-slate-800">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-2xl">👑</span>
+            <h2 class="text-xl font-black text-white">BrainSpark SaaS 專屬管理者後台</h2>
+            <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+              RBAC 最高權限管理
+            </span>
+          </div>
+          <p class="text-xs text-slate-400 mt-0.5">系統創作者鎖定：<code class="text-amber-300">mindnodeai@gmail.com</code>（具備永久最高管理權限，防刪除與防降級保護）</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button id="refreshUsersBtn" class="text-xs font-bold px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+            🔄 重新整理數據
+          </button>
+          <button id="exportCsvBtn" class="text-xs font-bold px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20 transition flex items-center gap-1">
+            📊 匯出會員名單 CSV (含BOM)
+          </button>
+          <button id="closeAdminModalBtn" class="text-xs font-bold px-3.5 py-2 rounded-xl bg-rose-900/70 hover:bg-rose-800 text-rose-100 border border-rose-700/50 transition">
+            ✕ 關閉後台
+          </button>
+        </div>
+      </div>
+
+      <!-- 後台子分頁切換 -->
+      <div class="flex flex-wrap items-center justify-between gap-2 my-3">
+        <div class="flex gap-2">
+          <button id="adminTabUsersBtn" class="text-xs font-bold px-4 py-2 rounded-xl bg-amber-500 text-slate-950 transition">
+            👥 註冊會員管理 (<span id="adminTotalUsersCount">0</span>)
+          </button>
+          <button id="adminTabHistoryBtn" class="text-xs font-bold px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+            🕹️ 全站會員歷史紀錄 (<span id="adminTotalLogsCount">0</span>)
+          </button>
+          <button id="adminTabAiReportBtn" class="text-xs font-bold px-4 py-2 rounded-xl bg-indigo-900/80 text-indigo-200 border border-indigo-500/40 hover:bg-indigo-800 transition">
+            🤖 AI 區間營運分析報告 & Word 匯出
+          </button>
+        </div>
+        <div id="adminActionToast" class="text-xs text-emerald-400 font-medium"></div>
+      </div>
+
+      <!-- 分頁 1：會員資料管理表格 -->
+      <div id="adminUsersSection" class="overflow-x-auto overflow-y-auto flex-grow border border-slate-800 rounded-2xl bg-slate-950/60">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="bg-slate-900/90 text-slate-300 border-b border-slate-800 sticky top-0">
+              <th class="py-3 px-3">真實姓名</th>
+              <th class="py-3 px-3">電子信箱 (Email)</th>
+              <th class="py-3 px-3">學員身分</th>
+              <th class="py-3 px-3">註冊時間</th>
+              <th class="py-3 px-3 text-center">登入次數</th>
+              <th class="py-3 px-3 text-center">系統權限</th>
+              <th class="py-3 px-3 text-right">權限與管理操作</th>
+            </tr>
+          </thead>
+          <tbody id="adminUsersTableBody" class="divide-y divide-slate-800/70">
+            <!-- JS 動態渲染 -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 分頁 2：會員歷史紀錄表格 -->
+      <div id="adminHistorySection" class="hidden overflow-x-auto overflow-y-auto flex-grow border border-slate-800 rounded-2xl bg-slate-950/60">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="bg-slate-900/90 text-slate-300 border-b border-slate-800 sticky top-0">
+              <th class="py-3 px-3">過關時間</th>
+              <th class="py-3 px-3">真實姓名 / 信箱</th>
+              <th class="py-3 px-3">學員身分</th>
+              <th class="py-3 px-3">挑戰主題</th>
+              <th class="py-3 px-3">配對模式與難度</th>
+              <th class="py-3 px-3 text-center">耗時 / 步數 / 連擊</th>
+            </tr>
+          </thead>
+          <tbody id="adminHistoryTableBody" class="divide-y divide-slate-800/70">
+            <!-- JS 動態渲染 -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 分頁 3：AI 營運分析報告與 Word 匯出 -->
+      <div id="adminAiReportSection" class="hidden overflow-y-auto flex-grow border border-slate-800 rounded-2xl bg-slate-950/80 p-4 space-y-4">
+        <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-3 bg-slate-900 p-4 rounded-2xl border border-indigo-500/30">
+          <div class="flex flex-wrap items-end gap-3">
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">📅 開始日期</label>
+              <input type="date" id="reportStartDate" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">📅 結束日期</label>
+              <input type="date" id="reportEndDate" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white">
+            </div>
+            <button id="generateAdminAiReportBtn" class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-lg transition">
+              ✨ 生成區間 AI 商業營運分析報告
+            </button>
+          </div>
+          <button id="exportWordReportBtn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-lg transition flex items-center justify-center gap-1.5">
+            📄 輸出成 WORD 檔 (.doc)
+          </button>
+        </div>
+
+        <div id="adminAiReportPreview" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 text-xs md:text-sm text-slate-200 leading-relaxed space-y-2 min-h-[260px]">
+          請選擇上方的起訖日期區間，並點擊「✨ 生成區間 AI 商業營運分析報告」。系統將自動彙整該區間的新增註冊會員結構（TONY老師學員 vs. 一般訪客）、總活躍登入次數、熱門主題偏好與平均過關步數，並可一鍵匯出為可編輯的 Microsoft Word (`.doc`) 報告！
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 個人過關歷史紀錄 Modal -->
+  <div id="myHistoryModal" class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-5 shadow-2xl max-h-[85vh] flex flex-col">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-base font-black text-cyan-300">📜 我的雲端過關歷史紀錄</h3>
+        <button id="closeMyHistoryBtn" class="text-xs px-3 py-1 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700">關閉</button>
+      </div>
+      <div id="myHistoryList" class="overflow-y-auto my-3 space-y-2 text-xs flex-grow">
+        <!-- JS 動態載入 -->
+      </div>
+    </div>
+  </div>
+
+  <!-- 自訂無阻斷式通知訊息 Modal (取代原生 alert / confirm) -->
+  <div id="customDialogModal" class="fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-5 text-center shadow-2xl">
+      <div id="customDialogIcon" class="text-3xl mb-2">💡</div>
+      <h4 id="customDialogTitle" class="text-base font-bold text-white mb-2">系統提示</h4>
+      <p id="customDialogMessage" class="text-xs text-slate-300 leading-relaxed mb-5"></p>
+      <div class="flex gap-2 justify-center">
+        <button id="customDialogCancelBtn" class="hidden flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold">取消</button>
+        <button id="customDialogOkBtn" class="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold">確定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- 原有主程式區塊 (未登入前鎖定隱藏，登入後完整呈現) -->
+  <!-- ========================================== -->
+  <div id="mainAppContainer" class="hidden flex-grow flex flex-col justify-between">
+  <!-- 頂部導覽與控制區 -->
+  <header class="max-w-5xl w-full mx-auto space-y-3">
+    <!-- 主標題與控制列 -->
+    <div class="flex flex-col lg:flex-row items-center justify-between gap-4 bg-slate-900/90 backdrop-blur-md p-4 rounded-2xl border border-slate-700/80 shadow-xl">
+      <div class="flex items-center gap-3 w-full lg:w-auto justify-between lg:justify-start">
+        <div class="flex items-center gap-3">
+          <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-2xl font-bold shadow-lg shadow-blue-500/30">
+            🧠
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h1 class="text-xl md:text-2xl font-black tracking-wide bg-gradient-to-r from-blue-400 via-cyan-300 to-emerald-400 bg-clip-text text-transparent">
+                BrainSpark AI 記憶翻牌
+              </h1>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                Gemini 賦能版
+              </span>
+            </div>
+            <p class="text-xs text-slate-400">動態主題生成 × 概念關聯配對 × AI 認知教練</p>
+          </div>
+        </div>
+
+        <!-- 行動端 API 按鈕 -->
+        <button id="toggleApiPanelBtnMobile" class="lg:hidden flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-slate-800 border border-slate-600 text-slate-200">
+          <span id="apiStatusDotMobile" class="w-2 h-2 rounded-full bg-slate-500"></span>
+          🔑 API 設定
+        </button>
+      </div>
+
+      <!-- 遊戲設定與選單 -->
+      <div class="flex flex-wrap items-center justify-center gap-2 w-full lg:w-auto">
+        <!-- 主題選擇 -->
+        <select id="themeSelect" class="bg-slate-800 border border-slate-600 text-slate-200 text-xs md:text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-blue-500">
+          <option value="tech">🤖 預設：AI 與科技</option>
+          <option value="marketing">📈 預設：品牌與行銷</option>
+          <option value="nature">🌿 預設：台灣自然生態</option>
+          <option value="ai_custom" id="aiCustomOption" disabled>✨ AI 動態生成主題 (需先生成)</option>
+        </select>
+
+        <!-- 配對模式切換 -->
+        <select id="matchModeSelect" class="bg-slate-800 border border-purple-500/50 text-purple-200 text-xs md:text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-purple-400" title="切換相同圖案或概念關聯配對">
+          <option value="identical">🎴 經典模式：相同圖卡配對 (A=A)</option>
+          <option value="concept">🔗 教學模式：概念關聯配對 (詞彙↔解析)</option>
+        </select>
+
+        <!-- 難度選擇 -->
+        <select id="difficultySelect" class="bg-slate-800 border border-slate-600 text-slate-200 text-xs md:text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-blue-500">
+          <option value="12">簡單 (4x3 - 6組)</option>
+          <option value="16" selected>標準 (4x4 - 8組)</option>
+          <option value="24">挑戰 (6x4 - 12組)</option>
+        </select>
+
+        <!-- 語音導讀開關 -->
+        <button id="ttsToggleBtn" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 text-xs md:text-sm px-3 py-2 rounded-xl transition" title="配對成功時自動語音朗讀知識卡">
+          🔇 語音關
+        </button>
+
+        <button id="restartBtn" class="bg-blue-600 hover:bg-blue-500 active:scale-95 transition text-white font-bold text-xs md:text-sm px-4 py-2 rounded-xl shadow-lg shadow-blue-600/30">
+          重新開始
+        </button>
+
+        <!-- 桌面端 API 設定與 AI 工坊按鈕 -->
+        <button id="toggleApiPanelBtn" class="hidden lg:flex items-center gap-1.5 text-xs md:text-sm font-bold px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-900/80 to-purple-900/80 hover:from-indigo-800 hover:to-purple-800 border border-purple-500/40 text-purple-100 transition shadow-lg">
+          <span id="apiStatusDot" class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+          ✨ AI 賦能工坊 / API KEY
+        </button>
+      </div>
+    </div>
+
+    <!-- AI 賦能工坊與 API Key 折疊面板 -->
+    <div id="aiControlPanel" class="bg-slate-900/95 border border-purple-500/40 rounded-2xl p-4 shadow-2xl transition-all">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+        <!-- 左側：API Key 輸入與保存 -->
+        <div class="lg:col-span-5 space-y-2 border-b lg:border-b-0 lg:border-r border-slate-800 pb-3 lg:pb-0 lg:pr-4">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+              🔑 Google Gemini API Key 設定
+            </label>
+            <span id="apiKeySavedBadge" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">未設定金鑰</span>
+          </div>
+          <div class="flex gap-2">
+            <div class="relative flex-grow">
+              <input type="password" id="apiKeyInput" placeholder="請貼上您的 Gemini API Key (AIzaSy...)" 
+                class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-purple-500 pr-8">
+              <button id="toggleKeyVisibilityBtn" type="button" class="absolute right-2.5 top-2 text-slate-400 hover:text-slate-200 text-xs" title="顯示/隱藏">
+                👁️
+              </button>
+            </div>
+            <button id="saveApiKeyBtn" class="bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold px-3 py-2 rounded-xl whitespace-nowrap transition">
+              儲存並驗證
+            </button>
+            <button id="clearApiKeyBtn" class="bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-slate-400 text-xs px-2.5 py-2 rounded-xl transition" title="清除金鑰">
+              清除
+            </button>
+          </div>
+          <p class="text-[11px] text-slate-400">
+            💡 金鑰僅安全儲存於您的瀏覽器本機 (`localStorage`)。啟用後可解鎖右側 **AI 萬物主題生成** 與 **過關 AI 認知教練診斷**。
+          </p>
+        </div>
+
+        <!-- 右側：AI 萬物主題生成器 -->
+        <div class="lg:col-span-7 space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+              🚀 AI 現代功能 1：萬物主題與知識閃卡即時生成
+            </label>
+            <span class="text-[11px] text-slate-400">支援「相同配對」與「概念關聯配對」</span>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-2">
+            <input type="text" id="aiTopicInput" placeholder="輸入任何想學或想玩的領域，例：跨境電商核心指標、生成式AI提示詞框架、台灣高山鳥類..." 
+              class="flex-grow bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-cyan-500">
+            <button id="generateTopicBtn" class="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-xl whitespace-nowrap shadow-lg shadow-cyan-600/20 flex items-center justify-center gap-1.5 transition">
+              <span id="generateBtnIcon">✨</span>
+              <span id="generateBtnText">AI 立即生成卡牌題庫</span>
+            </button>
+          </div>
+          <!-- 快速主題靈感膠囊 -->
+          <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
+            <span class="text-[11px] text-slate-400">熱門教學靈感：</span>
+            <button type="button" class="topic-chip text-[11px] bg-slate-800 hover:bg-slate-700 text-cyan-300 px-2 py-0.5 rounded-full border border-slate-700 transition" data-topic="數位行銷與 MarTech 必備術語">數位行銷 MarTech</button>
+            <button type="button" class="topic-chip text-[11px] bg-slate-800 hover:bg-slate-700 text-cyan-300 px-2 py-0.5 rounded-full border border-slate-700 transition" data-topic="生成式 AI 與大型語言模型核心概念">生成式 AI 核心</button>
+            <button type="button" class="topic-chip text-[11px] bg-slate-800 hover:bg-slate-700 text-cyan-300 px-2 py-0.5 rounded-full border border-slate-700 transition" data-topic="品牌定位與消費者心理學效應">品牌與心理學效應</button>
+            <button type="button" class="topic-chip text-[11px] bg-slate-800 hover:bg-slate-700 text-cyan-300 px-2 py-0.5 rounded-full border border-slate-700 transition" data-topic="ESG 企業永續發展與淨零碳排">ESG 永續發展</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 狀態儀表板 -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-2.5">
+      <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-2.5 text-center">
+        <p class="text-[11px] text-slate-400">⏱️ 遊戲時間</p>
+        <p id="timerDisplay" class="text-lg md:text-xl font-bold text-slate-100 mt-0.5">00:00</p>
+      </div>
+      <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-2.5 text-center">
+        <p class="text-[11px] text-slate-400">👣 翻牌步數</p>
+        <p id="movesDisplay" class="text-lg md:text-xl font-bold text-blue-400 mt-0.5">0</p>
+      </div>
+      <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-2.5 text-center">
+        <p class="text-[11px] text-slate-400">🔥 連續配對</p>
+        <p id="comboDisplay" class="text-lg md:text-xl font-bold text-amber-400 mt-0.5">0x</p>
+      </div>
+      <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-2.5 text-center">
+        <p class="text-[11px] text-slate-400">🏆 最佳紀錄</p>
+        <p id="bestScoreDisplay" class="text-lg md:text-xl font-bold text-emerald-400 mt-0.5">--</p>
+      </div>
+      <div class="col-span-2 md:col-span-1 bg-slate-900/70 border border-slate-800 rounded-xl p-2.5 flex flex-col justify-center items-center">
+        <p class="text-[11px] text-slate-400">💡 AI 學習輔助</p>
+        <button id="aiHintBtn" class="mt-1 text-xs font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-3 py-1 rounded-lg transition">
+          ⚡ 智慧提示 / 透視 (剩 2 次)
+        </button>
+      </div>
+    </div>
+
+    <!-- AI 知識閃卡微學習列 (配對成功時顯示) -->
+    <div id="knowledgeToast" class="bg-gradient-to-r from-emerald-950/90 via-slate-900/95 to-blue-950/90 border border-emerald-500/40 rounded-xl px-4 py-2.5 flex items-center justify-between gap-3 shadow-lg">
+      <div class="flex items-center gap-2.5 text-xs md:text-sm">
+        <span class="text-lg" id="toastIcon">💡</span>
+        <div>
+          <span class="font-bold text-emerald-300" id="toastTitle">準備開始挑戰：</span>
+          <span class="text-slate-200" id="toastDesc">翻開兩張卡片進行配對！若切換為「概念關聯模式」，請將「專有名詞（藍框）」與對應的「核心定義（紫框）」配對。</span>
+        </div>
+      </div>
+      <span id="currentTopicBadge" class="hidden sm:inline-block text-[11px] whitespace-nowrap px-2.5 py-1 rounded-full bg-slate-800 text-cyan-300 border border-slate-700">
+        主題：AI 與科技
+      </span>
+    </div>
+  </header>
+
+  <!-- 遊戲卡牌主舞台 -->
+  <main class="max-w-5xl w-full mx-auto my-4 flex-grow flex items-center justify-center">
+    <div id="gameBoard" class="grid gap-3 md:gap-4 w-full">
+      <!-- 卡片由 JS 動態生成 -->
+    </div>
+  </main>
+
+  <!-- 過關結算與 AI 認知教練 Modal -->
+  <div id="winModal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md hidden items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 text-center shadow-2xl transform transition-all max-h-[90vh] overflow-y-auto">
+      <div class="text-4xl mb-2" id="winStars">⭐⭐⭐</div>
+      <h2 class="text-2xl font-black text-white mb-1">恭喜完成挑戰！</h2>
+      <p class="text-xs text-slate-400 mb-4" id="winFeedback">您的記憶力與空間洞察力表現優異！</p>
+
+      <!-- 成績統計 -->
+      <div class="bg-slate-950/80 rounded-xl p-3.5 grid grid-cols-3 gap-2 mb-4 border border-slate-800">
+        <div>
+          <p class="text-xs text-slate-400">總耗時</p>
+          <p id="finalTime" class="text-lg font-bold text-white">00:00</p>
+        </div>
+        <div>
+          <p class="text-xs text-slate-400">總步數</p>
+          <p id="finalMoves" class="text-lg font-bold text-blue-400">0</p>
+        </div>
+        <div>
+          <p class="text-xs text-slate-400">最高連擊</p>
+          <p id="finalMaxCombo" class="text-lg font-bold text-amber-400">0x</p>
+        </div>
+      </div>
+
+      <!-- AI 現代功能 2：AI 認知教練與學習講評區 -->
+      <div class="bg-gradient-to-br from-indigo-950/60 to-slate-900 border border-indigo-500/40 rounded-xl p-4 mb-5 text-left">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
+            🤖 AI 認知教練講評與主題重點總結
+          </span>
+          <button id="generateCoachReportBtn" class="text-[11px] bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-2.5 py-1 rounded-lg transition">
+            ✨ 產生 AI 專屬診斷
+          </button>
+        </div>
+        <div id="aiCoachReportContent" class="text-xs text-slate-300 leading-relaxed space-y-1.5">
+          點擊右上角「產生 AI 專屬診斷」，讓 Gemini 根據您的翻牌數據、連擊率與本局主題，提供專屬的大腦認知分析與跨領域應用建議！
+        </div>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-2.5">
+        <button id="exportNotesBtn" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-cyan-300 font-bold py-3 rounded-xl text-xs md:text-sm transition">
+          📥 匯出本局知識閃卡講義 (.md)
+        </button>
+        <button id="playAgainBtn" class="flex-1 bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 text-white font-bold py-3 rounded-xl text-xs md:text-sm shadow-lg transition">
+          🔄 再玩一局
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 頁尾版權宣告 -->
+  <footer class="text-center text-xs text-slate-400 py-3 border-t border-slate-800/80 max-w-5xl w-full mx-auto mt-2">
+    @2020 TonyStudio 由TONY 楊文澤 老師設計創作
+  </footer>
+  </div>
+
+  <script>
+    function showAppNotification(message, title = '系統提示', icon = '💡') {
+      const modal = document.getElementById('customDialogModal');
+      document.getElementById('customDialogIcon').textContent = icon;
+      document.getElementById('customDialogTitle').textContent = title;
+      document.getElementById('customDialogMessage').textContent = message;
+      const cancelBtn = document.getElementById('customDialogCancelBtn');
+      const okBtn = document.getElementById('customDialogOkBtn');
+      cancelBtn.classList.add('hidden');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      okBtn.onclick = () => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      };
+    }
+
+    function showAppConfirm(message, onConfirm, title = '確認操作') {
+      const modal = document.getElementById('customDialogModal');
+      document.getElementById('customDialogIcon').textContent = '⚠️';
+      document.getElementById('customDialogTitle').textContent = title;
+      document.getElementById('customDialogMessage').textContent = message;
+      const cancelBtn = document.getElementById('customDialogCancelBtn');
+      const okBtn = document.getElementById('customDialogOkBtn');
+      cancelBtn.classList.remove('hidden');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      cancelBtn.onclick = () => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      };
+      okBtn.onclick = () => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        if (typeof onConfirm === 'function') onConfirm();
+      };
+    }
+
+    // ==========================================
+    // 1. 內建三大主題資料庫 (含概念配對與知識小百科)
+    // ==========================================
+    const THEMES = {
+      tech: {
+        title: 'AI 與科技',
+        items: [
+          { icon: '🤖', name: 'AI 代理 (Agent)', concept: '具自主規劃與工具呼叫能力的智慧系統', fact: 'AI Agent 能理解目標、拆解步驟並主動執行跨系統任務。' },
+          { icon: '🧠', name: '大型語言模型', concept: '透過海量文本訓練的深度學習生成模型', fact: 'LLM 是現代生成式 AI 進行推理、摘要與對話的核心大腦。' },
+          { icon: '☁️', name: '雲端無伺服器', concept: '免管理底層主機、依實際運算量計費架構', fact: 'Serverless 讓開發者專注於商業邏輯與前端互動體驗。' },
+          { icon: '⚡', name: '提示詞工程', concept: '結構化引導 AI 產出高精準度結果的技術', fact: '清晰的背景、角色與約束條件能大幅提升 AI 輸出品質。' },
+          { icon: '🔐', name: '零信任資安', concept: '永不預設信任、每次存取皆須驗證的機制', fact: '在雲端與遠距協作時代，零信任是保護企業數據的關鍵。' },
+          { icon: '📊', name: '向量資料庫', concept: '將語意轉為多維度數值以進行相似搜尋', fact: '向量檢索是實現 RAG（檢索增強生成）不可或缺的基礎。' },
+          { icon: '🚀', name: 'Vibe Coding', concept: '以自然語言協作快速打造全端應用的開發法', fact: '結合領域專家思維與 AI 編碼能力，讓創意迅速落地為系統。' },
+          { icon: '🌐', name: '邊緣運算', concept: '在資料源頭就近處理數據以降低延遲', fact: '結合物聯網設備，邊緣 AI 可在毫秒內完成即時視覺辨識。' },
+          { icon: '💻', name: '多模態模型', concept: '同時理解並生成文字、圖像、音訊與影片', fact: '原生多模態模型讓 AI 具備更貼近人類感官的綜合理解力。' },
+          { icon: '🔮', name: '預測性分析', concept: '結合歷史數據與機器學習推估未來趨勢', fact: '廣泛應用於庫存預測、顧客流失預警與動態定價策略。' },
+          { icon: '📡', name: '數位雙生', concept: '在虛擬空間建立實體資產的即時同步模型', fact: '可用於模擬工廠產線、城市交通或供應鏈壓力測試。' },
+          { icon: '🛠️', name: '工作流自動化', concept: '串接跨平台 API 消除重複性人工操作', fact: '結合 AI 判斷節點後，自動化流程能處理更複雜的非結構化任務。' }
+        ]
+      },
+      marketing: {
+        title: '品牌與行銷科技',
+        items: [
+          { icon: '🎯', name: 'STP 市場定位', concept: '市場區隔、目標選擇與品牌價值定位', fact: '明確的定位能讓品牌在消費者心中佔據獨特且不可替代的位置。' },
+          { icon: '💡', name: '顧客人物誌', concept: '描繪核心受眾痛點、動機與行為的虛擬輪廓', fact: '精準的 Persona 有助於打造打動人心的內容與產品體驗。' },
+          { icon: '📣', name: '全通路行銷', concept: '整合線上與線下接觸點提供無縫顧客體驗', fact: 'OMI 全通路策略能讓數據與服務在實體門市與電商間自由流動。' },
+          { icon: '📈', name: '轉換率優化', concept: '透過數據與 A/B 測試提升訪客採取行動比例', fact: '微幅提升著陸頁轉換率，往往能帶來顯著的廣告投資報酬成長。' },
+          { icon: '🤝', name: '顧客終身價值', concept: '單一客戶在整個往來期間貢獻的總利潤', fact: 'LTV 大於顧客獲取成本 (CAC) 的 3 倍通常是健康商業模式的指標。' },
+          { icon: '💎', name: '獨特銷售主張', concept: '向顧客傳遞產品差異化優勢的核心承諾', fact: '強而有力的 USP 能讓消費者在 3 秒內明白為何應該選擇你。' },
+          { icon: '🛒', name: '跨境社交電商', concept: '結合社群互動、短影音內容與跨國直購', fact: '透過沉浸式內容打破地域限制，是現代品牌出海的高效引擎。' },
+          { icon: '🎬', name: '黃金前三秒', concept: '短影音開頭迅速抓住受眾注意力的關鍵鉤子', fact: '強烈的視覺反差或直擊痛點的提問能有效降低滑走率。' },
+          { icon: '🧲', name: '集客式行銷', concept: '以高價值內容吸引潛在客戶主動找上門', fact: '相較於推播廣告，Inbound Marketing 更能建立長期品牌信任。' },
+          { icon: '💬', name: '淨推薦值 NPS', concept: '衡量顧客願意向他人推薦品牌程度的指標', fact: 'NPS 是預測品牌口碑擴散力與顧客忠誠度的重要溫度計。' },
+          { icon: '🧭', name: '顧客體驗旅程', concept: '視覺化梳理消費者從認知到擁護的每個接觸點', fact: '找出旅程中的峰值與痛點，是優化服務設計的最佳起點。' },
+          { icon: '🏆', name: '品牌資產', concept: '品牌知名度、聯想與忠誠度所累積的無形價值', fact: '深厚的品牌資產能賦予企業更高的定價權與抗風險能力。' }
+        ]
+      },
+      nature: {
+        title: '台灣自然生態',
+        items: [
+          { icon: '🐻', name: '台灣黑熊', concept: '胸前具明顯 V 字型白色斑紋的原森生態旗艦種', fact: '台灣黑熊是雜食性動物，也是森林種子傳播的重要推手。' },
+          { icon: '🦋', name: '台灣寬尾鳳蝶', concept: '後翅具兩條脈紋貫穿尾突的珍貴特有種蝴蝶', fact: '幼蟲僅以台灣檫樹為食，素有「夢幻之蝶」的美譽。' },
+          { icon: '🌲', name: '台灣紅檜', concept: '雲霧帶森林中的千年巨木與珍貴針葉樹種', fact: '紅檜常與台灣扁柏混生，構成壯麗的阿里山與棲蘭神木群。' },
+          { icon: '🦌', name: '台灣水鹿', concept: '台灣體型最大的原生草食性哺乳動物', fact: '常活動於高海拔水源地附近，雄鹿擁有分叉優美的鹿角。' },
+          { icon: '🦅', name: '熊鷹 (赫氏角鷹)', concept: '台灣森林中體型最碩大且強壯的留鳥猛禽', fact: '頭後有明顯冠羽，在排灣族與魯凱族文化中具有崇高地位。' },
+          { icon: '🌺', name: '台灣一葉蘭', concept: '僅長出一枚葉片並開出紫紅花朵的高山蘭花', fact: '主要分佈於中海拔雲霧帶的岩壁苔蘚上，姿態優雅迷人。' },
+          { icon: '🐢', name: '綠蠵龜', concept: '常於小琉球與東沙海域覓食產卵的保育類海龜', fact: '因攝食海藻與海草使體內脂肪呈淡綠色而得名。' },
+          { icon: '🦉', name: '黃嘴角鴞', concept: '嘴部呈黃色、鳴聲如吹哨的森林夜行性小型貓頭鷹', fact: '擁有絕佳的樹皮保護色，白天靜止時極難被察覺。' },
+          { icon: '🐟', name: '櫻花鉤吻鮭', concept: '冰河時期孑遺於大甲溪上游高山溪流的國寶魚', fact: '需要水溫低於 17 度且清澈無污染的溪流環境才能繁衍生息。' },
+          { icon: '⛰️', name: '玉山圓柏', concept: '在三千公尺以上強風冰雪環境中蜿蜒生長的灌木', fact: '迎風面常呈現蒼勁奇特的曲折樹型，展現極致生命韌性。' },
+          { icon: '🐬', name: '台灣白海豚', concept: '棲息於西海岸淺水海域、成年後呈粉紅色的海豚', fact: '粉紅色澤來自皮下血管調節體溫，是極度瀕危的海洋哺乳類。' },
+          { icon: '🐦', name: '黑長尾雉 (帝雉)', concept: '棲息於高海拔濃霧針葉林、具金屬藍光澤的特有鳥類', fact: '生性機警優雅，其身影更被印製於新台幣千元鈔票背面。' }
+        ]
+      },
+      ai_custom: {
+        title: 'AI 動態生成主題',
+        items: []
+      }
+    };
+
+    // ==========================================
+    // 2. Gemini API 呼叫與自動降級封裝
+    // ==========================================
+    const PRIMARY_MODEL = 'gemini-2.5-flash';
+    const FALLBACK_MODEL = 'gemini-2.0-flash';
+    const STORAGE_KEY_API = 'tonystudio_brainspark_gemini_key';
+
+    function getApiKey() {
+      return localStorage.getItem(STORAGE_KEY_API) || '';
+    }
+
+    async function callGeminiAPI(prompt, expectJson = false) {
+      const apiKey = getApiKey();
+      if (!apiKey) {
+        throw new Error('請先在上方「AI 賦能工坊」輸入並儲存您的 Gemini API Key！');
+      }
+
+      const modelsToTry = [PRIMARY_MODEL, FALLBACK_MODEL, 'gemini-1.5-flash'];
+      let lastError = null;
+
+      for (const modelName of modelsToTry) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
+        const payload = {
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.7
+          }
+        };
+        if (expectJson) {
+          payload.generationConfig.responseMimeType = 'application/json';
+        }
+
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const response = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+              const errData = await response.json().catch(() => ({}));
+              const errMsg = errData?.error?.message || `HTTP ${response.status}`;
+              if (response.status === 404 || response.status === 400) {
+                lastError = new Error(errMsg);
+                break;
+              }
+              throw new Error(errMsg);
+            }
+
+            const data = await response.json();
+            const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!text) throw new Error('AI 未回傳有效內容');
+            return text;
+          } catch (err) {
+            lastError = err;
+            await new Promise(r => setTimeout(r, 600 * Math.pow(2, attempt)));
+          }
+        }
+      }
+      throw lastError || new Error('API 呼叫失敗，請檢查 API Key 是否正確。');
+    }
+
+    // ==========================================
+    // 3. 遊戲核心狀態與 DOM 綁定
+    // ==========================================
+    let firstCard = null;
+    let secondCard = null;
+    let lockBoard = false;
+    let moves = 0;
+    let matchedPairs = 0;
+    let totalPairs = 8;
+    let combo = 0;
+    let maxCombo = 0;
+    let timer = null;
+    let secondsElapsed = 0;
+    let gameStarted = false;
+    let hintsRemaining = 2;
+    let ttsEnabled = false;
+    let currentRoundItems = [];
+
+    const gameBoard = document.getElementById('gameBoard');
+    const timerDisplay = document.getElementById('timerDisplay');
+    const movesDisplay = document.getElementById('movesDisplay');
+    const comboDisplay = document.getElementById('comboDisplay');
+    const bestScoreDisplay = document.getElementById('bestScoreDisplay');
+    const themeSelect = document.getElementById('themeSelect');
+    const matchModeSelect = document.getElementById('matchModeSelect');
+    const difficultySelect = document.getElementById('difficultySelect');
+    const ttsToggleBtn = document.getElementById('ttsToggleBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    const aiHintBtn = document.getElementById('aiHintBtn');
+    const winModal = document.getElementById('winModal');
+    const playAgainBtn = document.getElementById('playAgainBtn');
+    const exportNotesBtn = document.getElementById('exportNotesBtn');
+
+    // API 與 AI 工坊元素
+    const aiControlPanel = document.getElementById('aiControlPanel');
+    const toggleApiPanelBtn = document.getElementById('toggleApiPanelBtn');
+    const toggleApiPanelBtnMobile = document.getElementById('toggleApiPanelBtnMobile');
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    const toggleKeyVisibilityBtn = document.getElementById('toggleKeyVisibilityBtn');
+    const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
+    const clearApiKeyBtn = document.getElementById('clearApiKeyBtn');
+    const apiKeySavedBadge = document.getElementById('apiKeySavedBadge');
+    const apiStatusDot = document.getElementById('apiStatusDot');
+    const apiStatusDotMobile = document.getElementById('apiStatusDotMobile');
+    const aiTopicInput = document.getElementById('aiTopicInput');
+    const generateTopicBtn = document.getElementById('generateTopicBtn');
+    const generateBtnText = document.getElementById('generateBtnText');
+    const aiCustomOption = document.getElementById('aiCustomOption');
+    const generateCoachReportBtn = document.getElementById('generateCoachReportBtn');
+    const aiCoachReportContent = document.getElementById('aiCoachReportContent');
+
+    // Toast 元素
+    const toastIcon = document.getElementById('toastIcon');
+    const toastTitle = document.getElementById('toastTitle');
+    const toastDesc = document.getElementById('toastDesc');
+    const currentTopicBadge = document.getElementById('currentTopicBadge');
+
+    // 工具函式
+    function shuffle(array) {
+      const arr = [...array];
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60).toString().padStart(2, '0');
+      const s = (sec % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    function updateToast(icon, title, desc) {
+      toastIcon.textContent = icon;
+      toastTitle.textContent = title;
+      toastDesc.textContent = desc;
+    }
+
+    function speakText(text) {
+      if (!ttsEnabled || !('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'zh-TW';
+      utterance.rate = 1.05;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // 更新 API Key 狀態介面
+    function refreshApiStatusUI() {
+      const key = getApiKey();
+      if (key) {
+        apiKeyInput.value = key;
+        apiKeySavedBadge.textContent = '✅ 已就緒';
+        apiKeySavedBadge.className = 'text-[11px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+        apiStatusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse';
+        apiStatusDotMobile.className = 'w-2 h-2 rounded-full bg-emerald-400';
+      } else {
+        apiKeyInput.value = '';
+        apiKeySavedBadge.textContent = '未設定金鑰';
+        apiKeySavedBadge.className = 'text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-400';
+        apiStatusDot.className = 'w-2.5 h-2.5 rounded-full bg-slate-400';
+        apiStatusDotMobile.className = 'w-2 h-2 rounded-full bg-slate-500';
+      }
+    }
+
+    function updateBestScoreDisplay() {
+      const difficulty = difficultySelect.value;
+      const mode = matchModeSelect.value;
+      const best = localStorage.getItem(`brainspark_best_${mode}_${difficulty}`);
+      bestScoreDisplay.textContent = best ? `${best} 步` : '--';
+    }
+
+    // ==========================================
+    // 4. 初始化並渲染遊戲棋盤
+    // ==========================================
+    function initGame() {
+      clearInterval(timer);
+      secondsElapsed = 0;
+      moves = 0;
+      matchedPairs = 0;
+      combo = 0;
+      maxCombo = 0;
+      firstCard = null;
+      secondCard = null;
+      lockBoard = false;
+      gameStarted = false;
+      hintsRemaining = 2;
+
+      timerDisplay.textContent = '00:00';
+      movesDisplay.textContent = '0';
+      comboDisplay.textContent = '0x';
+      aiHintBtn.textContent = `⚡ 智慧提示 / 透視 (剩 ${hintsRemaining} 次)`;
+      aiHintBtn.disabled = false;
+      aiHintBtn.classList.remove('opacity-40');
+
+      winModal.classList.add('hidden');
+      winModal.classList.remove('flex');
+
+      const totalCards = parseInt(difficultySelect.value, 10);
+      totalPairs = totalCards / 2;
+      const themeKey = themeSelect.value;
+      const themeObj = THEMES[themeKey] || THEMES.tech;
+      const matchMode = matchModeSelect.value;
+
+      currentTopicBadge.textContent = `主題：${themeObj.title}`;
+      updateBestScoreDisplay();
+
+      if (matchMode === 'concept') {
+        updateToast('🔗', '概念關聯模式啟動：', '請將「專有名詞（藍框卡）」與對應的「核心定義（紫框卡）」進行配對！');
+      } else {
+        updateToast('🎴', '經典配對模式啟動：', '翻開兩張相同的圖卡即可完成配對，並解鎖該詞彙的知識小百科！');
+      }
+
+      // 依難度調整版面
+      gameBoard.className = 'grid gap-3 md:gap-4 w-full mx-auto';
+      let cardHeightClass = 'h-24 md:h-28';
+      if (totalCards === 12) {
+        gameBoard.classList.add('grid-cols-3', 'sm:grid-cols-4', 'max-w-3xl');
+        cardHeightClass = 'h-28 md:h-32';
+      } else if (totalCards === 16) {
+        gameBoard.classList.add('grid-cols-4', 'max-w-3xl');
+        cardHeightClass = 'h-24 md:h-28';
+      } else if (totalCards === 24) {
+        gameBoard.classList.add('grid-cols-4', 'md:grid-cols-6', 'max-w-5xl');
+        cardHeightClass = 'h-24 md:h-28';
+      }
+
+      // 抽取題庫並建立牌組
+      const selectedItems = shuffle(themeObj.items).slice(0, totalPairs);
+      currentRoundItems = selectedItems;
+      let deck = [];
+
+      selectedItems.forEach((item, pairId) => {
+        if (matchMode === 'concept') {
+          deck.push({
+            pairId,
+            cardType: 'A',
+            icon: item.icon,
+            primaryText: item.name,
+            subText: '專有名詞',
+            fact: item.fact,
+            name: item.name
+          });
+          deck.push({
+            pairId,
+            cardType: 'B',
+            icon: '💡',
+            primaryText: item.concept,
+            subText: '核心解析',
+            fact: item.fact,
+            name: item.name
+          });
+        } else {
+          const cardData = {
+            pairId,
+            cardType: 'A',
+            icon: item.icon,
+            primaryText: item.name,
+            subText: item.concept,
+            fact: item.fact,
+            name: item.name
+          };
+          deck.push({ ...cardData });
+          deck.push({ ...cardData });
+        }
+      });
+
+      deck = shuffle(deck);
+
+      // 渲染 DOM
+      gameBoard.innerHTML = '';
+      deck.forEach((cardData, index) => {
+        const cardEl = document.createElement('div');
+        cardEl.className = `card perspective-1000 cursor-pointer ${cardHeightClass}`;
+        cardEl.dataset.pairId = cardData.pairId;
+        cardEl.dataset.name = cardData.name;
+        cardEl.dataset.fact = cardData.fact;
+        cardEl.dataset.index = index;
+
+        const isConceptB = cardData.cardType === 'B';
+
+        cardEl.innerHTML = `
+          <div class="card-inner">
+            <div class="card-back"></div>
+            <div class="card-front ${isConceptB ? 'concept-b' : ''} p-2 text-center">
+              ${isConceptB
+                ? `<span class="text-[10px] font-bold text-purple-300 bg-purple-950/80 px-2 py-0.5 rounded-full mb-1 border border-purple-500/30">概念解析</span>
+                   <p class="text-xs md:text-sm font-medium text-slate-100 leading-snug line-clamp-3 px-1">${cardData.primaryText}</p>`
+                : `<span class="text-2xl md:text-3xl mb-1">${cardData.icon}</span>
+                   <span class="text-xs md:text-sm font-bold text-white tracking-wide leading-tight">${cardData.primaryText}</span>`
+              }
+            </div>
+          </div>
+        `;
+
+        cardEl.addEventListener('click', () => flipCard(cardEl));
+        gameBoard.appendChild(cardEl);
+      });
+    }
+
+    // ==========================================
+    // 5. 翻牌、配對與智慧提示邏輯
+    // ==========================================
+    function startTimer() {
+      if (gameStarted) return;
+      gameStarted = true;
+      timer = setInterval(() => {
+        secondsElapsed++;
+        timerDisplay.textContent = formatTime(secondsElapsed);
+      }, 1000);
+    }
+
+    function flipCard(card) {
+      if (lockBoard) return;
+      if (card === firstCard) return;
+      if (card.classList.contains('matched')) return;
+
+      startTimer();
+      card.classList.add('flipped');
+
+      if (!firstCard) {
+        firstCard = card;
+        return;
+      }
+
+      secondCard = card;
+      moves++;
+      movesDisplay.textContent = moves;
+      checkForMatch();
+    }
+
+    function checkForMatch() {
+      const isMatch = firstCard.dataset.pairId === secondCard.dataset.pairId;
+      if (isMatch) {
+        disableCards();
+      } else {
+        unflipCards();
+      }
+    }
+
+    function disableCards() {
+      firstCard.classList.add('matched');
+      secondCard.classList.add('matched');
+
+      matchedPairs++;
+      combo++;
+      if (combo > maxCombo) maxCombo = combo;
+      comboDisplay.textContent = `${combo}x`;
+
+      const termName = firstCard.dataset.name;
+      const factText = firstCard.dataset.fact;
+      updateToast('✨', `配對成功【${termName}】：`, factText);
+      speakText(`${termName}。${factText}`);
+
+      resetBoard();
+
+      if (matchedPairs === totalPairs) {
+        setTimeout(handleGameWin, 550);
+      }
+    }
+
+    function unflipCards() {
+      lockBoard = true;
+      combo = 0;
+      comboDisplay.textContent = '0x';
+
+      setTimeout(() => {
+        firstCard.classList.remove('flipped');
+        secondCard.classList.remove('flipped');
+        resetBoard();
+      }, 950);
+    }
+
+    function resetBoard() {
+      [firstCard, secondCard, lockBoard] = [null, null, false];
+    }
+
+    // 語音導讀切換
+    ttsToggleBtn.addEventListener('click', () => {
+      ttsEnabled = !ttsEnabled;
+      if (ttsEnabled) {
+        ttsToggleBtn.textContent = '🔊 語音開';
+        ttsToggleBtn.classList.replace('text-slate-300', 'text-emerald-300');
+        ttsToggleBtn.classList.replace('border-slate-600', 'border-emerald-500/50');
+        speakText('已開啟知識語音導讀');
+      } else {
+        window.speechSynthesis?.cancel();
+        ttsToggleBtn.textContent = '🔇 語音關';
+        ttsToggleBtn.classList.replace('text-emerald-300', 'text-slate-300');
+        ttsToggleBtn.classList.replace('border-emerald-500/50', 'border-slate-600');
+      }
+    });
+
+    // 智慧提示 / 瞬間透視功能
+    aiHintBtn.addEventListener('click', () => {
+      if (hintsRemaining <= 0 || lockBoard) return;
+      hintsRemaining--;
+      aiHintBtn.textContent = `⚡ 智慧提示 / 透視 (剩 ${hintsRemaining} 次)`;
+      if (hintsRemaining === 0) {
+        aiHintBtn.disabled = true;
+        aiHintBtn.classList.add('opacity-40');
+      }
+
+      lockBoard = true;
+      const unmatched = Array.from(document.querySelectorAll('.card:not(.matched):not(.flipped)'));
+      unmatched.forEach(c => c.classList.add('flipped'));
+      updateToast('👁️', '智慧全場透視啟動：', '請把握 1.2 秒黃金記憶時間，鎖定目標卡牌位置！');
+
+      setTimeout(() => {
+        unmatched.forEach(c => c.classList.remove('flipped'));
+        lockBoard = false;
+      }, 1200);
+    });
+
+    // ==========================================
+    // 6. 過關結算、講義匯出與 AI 認知教練分析
+    // ==========================================
+    function handleGameWin() {
+      clearInterval(timer);
+
+      const difficulty = difficultySelect.value;
+      const mode = matchModeSelect.value;
+      const storageKey = `brainspark_best_${mode}_${difficulty}`;
+      const currentBest = localStorage.getItem(storageKey);
+      if (!currentBest || moves < parseInt(currentBest, 10)) {
+        localStorage.setItem(storageKey, moves);
+        updateBestScoreDisplay();
+      }
+
+      let stars = '⭐⭐⭐';
+      let feedback = '神級記憶與洞察力！您的專注度與策略堪稱完美！';
+      if (moves > totalPairs * 2.2) {
+        stars = '⭐';
+        feedback = '挑戰完成！多練習幾次就能掌握空間與概念連結訣竅！';
+      } else if (moves > totalPairs * 1.6) {
+        stars = '⭐⭐';
+        feedback = '表現優異！距離完美破關只差一點點了！';
+      }
+
+      document.getElementById('winStars').textContent = stars;
+      document.getElementById('winFeedback').textContent = feedback;
+      document.getElementById('finalTime').textContent = formatTime(secondsElapsed);
+      document.getElementById('finalMoves').textContent = `${moves} 步`;
+      document.getElementById('finalMaxCombo').textContent = `${maxCombo}x`;
+
+      const themeTitle = THEMES[themeSelect.value]?.title || '自訂主題';
+      aiCoachReportContent.innerHTML = `您在【${themeTitle}】主題中以 <b>${moves} 步</b>（耗時 ${formatTime(secondsElapsed)}）完成配對。點擊右上角按鈕，讓 Gemini AI 為您生成專屬認知講評與領域知識總結！`;
+
+      // 自動同步過關紀錄至 Firebase 雲端資料庫 (供管理後台與個人歷史查詢)
+      if (typeof window.recordCloudGameHistory === 'function') {
+        window.recordCloudGameHistory({
+          themeTitle,
+          matchMode: matchModeSelect.value === 'concept' ? '概念關聯配對' : '經典相同配對',
+          difficulty: `${totalPairs * 2}張 (${totalPairs}組)`,
+          moves,
+          secondsElapsed,
+          maxCombo
+        });
+      }
+
+      winModal.classList.remove('hidden');
+      winModal.classList.add('flex');
+    }
+
+    // 匯出本局知識閃卡講義 (.md)
+    exportNotesBtn.addEventListener('click', () => {
+      const themeTitle = THEMES[themeSelect.value]?.title || 'AI 記憶翻牌';
+      let md = `# 🧠 BrainSpark 知識閃卡學習講義：${themeTitle}\n\n`;
+      md += `> **挑戰成績**：耗時 ${formatTime(secondsElapsed)} ｜ 翻牌步數 ${moves} 步 ｜ 最高連擊 ${maxCombo}x\n\n---\n\n`;
+      currentRoundItems.forEach((item, idx) => {
+        md += `### ${idx + 1}. ${item.icon} ${item.name}\n`;
+        md += `- **核心概念**：${item.concept}\n`;
+        md += `- **實務洞察**：${item.fact}\n\n`;
+      });
+      md += `---\n*@2020 TonyStudio 由TONY 楊文澤 老師設計創作*\n`;
+
+      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `BrainSpark_${themeTitle}_知識講義.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // 呼叫 Gemini 生成過關認知講評
+    generateCoachReportBtn.addEventListener('click', async () => {
+      if (!getApiKey()) {
+        aiCoachReportContent.innerHTML = `<span class="text-amber-300">⚠️ 請先關閉視窗，於上方「AI 賦能工坊」輸入您的 Gemini API Key 即可啟用 AI 教練講評！</span>`;
+        return;
+      }
+
+      const themeTitle = THEMES[themeSelect.value]?.title || '專業領域';
+      const modeText = matchModeSelect.value === 'concept' ? '高難度的概念關聯配對（詞彙對定義）' : '經典視覺圖卡配對';
+
+      generateCoachReportBtn.disabled = true;
+      generateCoachReportBtn.textContent = '⏳ AI 教練分析中...';
+      aiCoachReportContent.innerHTML = `<span class="text-indigo-300 animate-pulse">🧠 Gemini 正在分析您的短期記憶曲線與【${themeTitle}】掌握度...</span>`;
+
+      const prompt = `你是一位兼具幽默感與專業洞察的「AI 認知科學與商業導師」。
+玩家剛完成了「${themeTitle}」主題的記憶翻牌挑戰，模式為「${modeText}」。
+遊戲數據：總配對組數 ${totalPairs} 組、翻牌總步數 ${moves} 步、總耗時 ${secondsElapsed} 秒、最高連續配對 ${maxCombo} 次。
+請用繁體中文撰寫約 120~160 字的精煉講評，包含：
+1. 【大腦認知表現】：根據步數與連擊給予正向激勵與記憶策略分析。
+2. 【${themeTitle} 實務金句】：給出一句該領域極具啟發性的行動建議或洞察。`;
+
+      try {
+        const report = await callGeminiAPI(prompt, false);
+        aiCoachReportContent.innerHTML = report.replace(/\n/g, '<br>');
+      } catch (err) {
+        aiCoachReportContent.innerHTML = `<span class="text-rose-400">❌ 分析生成失敗：${err.message}</span>`;
+      } finally {
+        generateCoachReportBtn.disabled = false;
+        generateCoachReportBtn.textContent = '✨ 重新產生診斷';
+      }
+    });
+
+    // ==========================================
+    // 7. AI 萬物主題生成器
+    // ==========================================
+    generateTopicBtn.addEventListener('click', async () => {
+      const topic = aiTopicInput.value.trim();
+      if (!topic) {
+        showAppNotification('請先輸入想生成的領域或主題關鍵字！（例如：跨境電商指標、生成式AI、台灣高山鳥類）', '請輸入主題', '✏️');
+        aiTopicInput.focus();
+        return;
+      }
+
+      if (!getApiKey()) {
+        showAppNotification('請先在左側輸入並儲存您的 Google Gemini API Key！', '需要 API Key', '🔑');
+        apiKeyInput.focus();
+        return;
+      }
+
+      generateTopicBtn.disabled = true;
+      generateBtnText.textContent = 'AI 正在建構題庫...';
+      updateToast('🤖', 'Gemini AI 正在為您打造專屬卡牌：', `正在根據「${topic}」生成 12 組核心詞彙、Emoji、定義解析與知識小百科...`);
+
+      const prompt = `請針對主題「${topic}」，設計 12 組適合用於「記憶翻牌與概念配對教學遊戲」的核心知識卡。
+請嚴格輸出 JSON Array 格式，陣列中包含 12 個物件，每個物件必須包含以下 4 個欄位：
+- "icon": 一個最能代表該概念的單一 Emoji
+- "name": 核心專有名詞或名稱（繁體中文，2~7個字以內）
+- "concept": 該名詞的核心定義或對應特徵（繁體中文，12~20個字以內，用於概念配對卡）
+- "fact": 配對成功時顯示的一句話實務洞察或趣味小百科（繁體中文，25~40個字以內）`;
+
+      try {
+        const rawJson = await callGeminiAPI(prompt, true);
+        const cleaned = rawJson.replace(/```json|```/g, '').trim();
+        const parsedItems = JSON.parse(cleaned);
+
+        if (!Array.isArray(parsedItems) || parsedItems.length < 6) {
+          throw new Error('AI 回傳的題庫數量不足，請再試一次。');
+        }
+
+        THEMES.ai_custom = {
+          title: topic,
+          items: parsedItems.slice(0, 12)
+        };
+
+        aiCustomOption.disabled = false;
+        aiCustomOption.textContent = `✨ AI 主題：${topic}`;
+        themeSelect.value = 'ai_custom';
+
+        initGame();
+        updateToast('🎉', `AI 主題【${topic}】生成完畢！`, '已為您自動載入全新卡牌組，可隨時切換「經典相同配對」或「概念關聯配對」模式！');
+      } catch (err) {
+        showAppNotification(`AI 主題生成失敗：${err.message}`, '生成失敗', '⚠️');
+        updateToast('⚠️', '生成遭遇問題：', err.message);
+      } finally {
+        generateTopicBtn.disabled = false;
+        generateBtnText.textContent = 'AI 立即生成卡牌題庫';
+      }
+    });
+
+    // 點擊熱門靈感膠囊快速填入
+    document.querySelectorAll('.topic-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        aiTopicInput.value = chip.dataset.topic;
+        if (getApiKey()) {
+          generateTopicBtn.click();
+        } else {
+          apiKeyInput.focus();
+          updateToast('🔑', '請先設定 API Key：', `已為您填入「${chip.dataset.topic}」，請先於上方輸入 Gemini API Key 後點擊生成！`);
+        }
+      });
+    });
+
+    // ==========================================
+    // 8. API Key 管理與面板互動事件
+    // ==========================================
+    function toggleApiPanel() {
+      aiControlPanel.classList.toggle('hidden');
+    }
+
+    toggleApiPanelBtn.addEventListener('click', toggleApiPanel);
+    toggleApiPanelBtnMobile.addEventListener('click', toggleApiPanel);
+
+    toggleKeyVisibilityBtn.addEventListener('click', () => {
+      apiKeyInput.type = apiKeyInput.type === 'password' ? 'text' : 'password';
+    });
+
+    saveApiKeyBtn.addEventListener('click', async () => {
+      const val = apiKeyInput.value.trim();
+      if (!val) {
+        showAppNotification('請輸入有效的 Gemini API Key！', '提示', '🔑');
+        return;
+      }
+      localStorage.setItem(STORAGE_KEY_API, val);
+      refreshApiStatusUI();
+
+      saveApiKeyBtn.disabled = true;
+      saveApiKeyBtn.textContent = '驗證中...';
+      try {
+        await callGeminiAPI('請回覆 OK 兩個字', false);
+        apiKeySavedBadge.textContent = '✅ 連線驗證成功';
+        updateToast('🚀', 'Gemini API 連線成功：', '現在您可以在上方輸入任何主題關鍵字，讓 AI 即時生成專屬記憶翻牌題庫！');
+      } catch (err) {
+        apiKeySavedBadge.textContent = '⚠️ 金鑰驗證異常';
+        apiKeySavedBadge.className = 'text-[11px] px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30';
+        showAppNotification(`API Key 已儲存，但連線測試未通過：${err.message}`, '連線測試異常', '⚠️');
+      } finally {
+        saveApiKeyBtn.disabled = false;
+        saveApiKeyBtn.textContent = '儲存並驗證';
+      }
+    });
+
+    clearApiKeyBtn.addEventListener('click', () => {
+      localStorage.removeItem(STORAGE_KEY_API);
+      refreshApiStatusUI();
+      updateToast('🔒', '已清除本機 API Key：', '目前使用內建三大主題題庫，隨時可重新輸入金鑰啟用 AI 功能。');
+    });
+
+    restartBtn.addEventListener('click', initGame);
+    playAgainBtn.addEventListener('click', initGame);
+    themeSelect.addEventListener('change', initGame);
+    matchModeSelect.addEventListener('change', initGame);
+    difficultySelect.addEventListener('change', initGame);
+
+    // 啟動初始化
+    refreshApiStatusUI();
+    initGame();
+  </script>
+
+  <!-- ========================================== -->
+  <!-- Firebase 全端 SaaS 會員系統與管理後台核心模組 -->
+  <!-- ========================================== -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import {
+      getAuth,
+      createUserWithEmailAndPassword,
+      signInWithEmailAndPassword,
+      signInWithPopup,
+      GoogleAuthProvider,
+      sendEmailVerification,
+      sendPasswordResetEmail,
+      signOut,
+      onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import {
+      getFirestore,
+      doc,
+      getDoc,
+      setDoc,
+      updateDoc,
+      deleteDoc,
+      collection,
+      getDocs,
+      addDoc
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // TONY 老師專屬正式版 Firebase 金鑰
+    const firebaseConfig = {
+      apiKey: "AIzaSyBm3VDP4X7H8CwOSL0dHhW5____xhuVM80",
+      authDomain: "game05-brainspark-cards.firebaseapp.com",
+      projectId: "game05-brainspark-cards",
+      storageBucket: "game05-brainspark-cards.firebasestorage.app",
+      messagingSenderId: "58904140593",
+      appId: "1:58904140593:web:c14d73810a582e74aa6e10",
+      measurementId: "G-2PYRGCLTCV"
+    };
+
+    const CREATOR_EMAIL = "mindnodeai@gmail.com";
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const googleProvider = new GoogleAuthProvider();
+
+    // 雲端資料表參照輔助 (同時相容標準根集合與環境規則路徑)
+    const USERS_COL = "users";
+    const HISTORY_COL = "game_history";
+
+    let currentUserProfile = null;
+    let cachedAllUsers = [];
+    let cachedAllHistory = [];
+    let lastUnverifiedCred = null;
+
+    // DOM 綁定
+    const authGateOverlay = document.getElementById('authGateOverlay');
+    const mainAppContainer = document.getElementById('mainAppContainer');
+    const saasUserTopBar = document.getElementById('saasUserTopBar');
+    const authAlertBox = document.getElementById('authAlertBox');
+    const resendVerifyWrap = document.getElementById('resendVerifyWrap');
+    const resendVerifyBtn = document.getElementById('resendVerifyBtn');
+
+    const tabLoginBtn = document.getElementById('tabLoginBtn');
+    const tabRegisterBtn = document.getElementById('tabRegisterBtn');
+    const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerForm');
+    const forgotForm = document.getElementById('forgotForm');
+    const showForgotModalBtn = document.getElementById('showForgotModalBtn');
+    const backToLoginBtn = document.getElementById('backToLoginBtn');
+    const googleLoginBtn = document.getElementById('googleLoginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+
+    // 密碼眼睛切換
+    document.querySelectorAll('.pass-eye-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.getAttribute('data-toggle-pass');
+        const inputEl = document.getElementById(targetId);
+        if (!inputEl) return;
+        if (inputEl.type === 'password') {
+          inputEl.type = 'text';
+          btn.textContent = '🙈';
+        } else {
+          inputEl.type = 'password';
+          btn.textContent = '👁️';
+        }
+      });
+    });
+
+    // 顯示認證訊息 (type: 'success' 綠字 | 'error' 紅字 | 'info' 藍字)
+    function showAuthAlert(msg, type = 'info') {
+      authAlertBox.classList.remove('hidden', 'bg-emerald-950/90', 'border-emerald-500/60', 'text-emerald-300', 'bg-rose-950/90', 'border-rose-500/60', 'text-rose-300', 'bg-blue-950/90', 'border-blue-500/60', 'text-blue-200');
+      if (type === 'success') {
+        authAlertBox.classList.add('bg-emerald-950/90', 'border-emerald-500/60', 'text-emerald-300');
+      } else if (type === 'error') {
+        authAlertBox.classList.add('bg-rose-950/90', 'border-rose-500/60', 'text-rose-300');
+      } else {
+        authAlertBox.classList.add('bg-blue-950/90', 'border-blue-500/60', 'text-blue-200');
+      }
+      authAlertBox.innerHTML = msg;
+    }
+
+    function switchAuthView(view) {
+      authAlertBox.classList.add('hidden');
+      resendVerifyWrap.classList.add('hidden');
+      loginForm.classList.add('hidden');
+      registerForm.classList.add('hidden');
+      forgotForm.classList.add('hidden');
+
+      if (view === 'login') {
+        loginForm.classList.remove('hidden');
+        tabLoginBtn.className = "py-2 rounded-xl text-xs font-bold bg-blue-600 text-white shadow transition";
+        tabRegisterBtn.className = "py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white transition";
+      } else if (view === 'register') {
+        registerForm.classList.remove('hidden');
+        tabRegisterBtn.className = "py-2 rounded-xl text-xs font-bold bg-emerald-600 text-white shadow transition";
+        tabLoginBtn.className = "py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white transition";
+      } else if (view === 'forgot') {
+        forgotForm.classList.remove('hidden');
+      }
+    }
+
+    tabLoginBtn.addEventListener('click', () => switchAuthView('login'));
+    tabRegisterBtn.addEventListener('click', () => switchAuthView('register'));
+    showForgotModalBtn.addEventListener('click', () => switchAuthView('forgot'));
+    backToLoginBtn.addEventListener('click', () => switchAuthView('login'));
+
+    // ==========================================
+    // 1. 註冊流程 (含 Double Opt-in 信箱驗證與強制登出)
+    // ==========================================
+    registerForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const realName = document.getElementById('regRealName').value.trim();
+      const identity = document.getElementById('regIdentity').value;
+      const email = document.getElementById('regEmail').value.trim().toLowerCase();
+      const password = document.getElementById('regPassword').value;
+      const submitBtn = document.getElementById('regSubmitBtn');
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = '正在建立帳號並發送驗證信...';
+
+      try {
+        const userCred = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCred.user;
+
+        const isCreator = email === CREATOR_EMAIL.toLowerCase();
+        const nowIso = new Date().toISOString();
+
+        // 寫入 Firestore 會員資料
+        const profileData = {
+          uid: user.uid,
+          email: email,
+          realName: realName,
+          identity: identity,
+          role: isCreator ? 'admin' : 'user',
+          isCreator: isCreator,
+          createdAt: nowIso,
+          lastLoginAt: nowIso,
+          loginCount: 0
+        };
+
+        await setDoc(doc(db, USERS_COL, user.uid), profileData, { merge: true });
+
+        // 觸發發送驗證信
+        await sendEmailVerification(user);
+
+        // 強制登出，確保 Double Opt-in
+        await signOut(auth);
+
+        switchAuthView('login');
+        document.getElementById('loginEmail').value = email;
+        showAuthAlert(
+          `✅ <strong>註冊成功！請至信箱點擊驗證</strong><br>我們已將驗證信寄至 <b>${email}</b>。<br>💡 <b>溫馨提醒：註冊確認信有時會跑到「垃圾郵件匣」，請記得前往確認唷！</b>`,
+          'success'
+        );
+      } catch (err) {
+        let msg = err.message;
+        if (err.code === 'auth/email-already-in-use') msg = '此電子郵件已經註冊過，請直接登入或使用忘記密碼功能。';
+        else if (err.code === 'auth/weak-password') msg = '密碼強度不足，請設定至少 6 位字元。';
+        showAuthAlert(`❌ 註冊失敗：${msg}`, 'error');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '註冊並發送驗證信';
+      }
+    });
+
+    // ==========================================
+    // 2. Email 登入流程 (嚴格檢查 emailVerified)
+    // ==========================================
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+      const password = document.getElementById('loginPassword').value;
+      const submitBtn = document.getElementById('loginSubmitBtn');
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = '驗證身分中...';
+      resendVerifyWrap.classList.add('hidden');
+
+      try {
+        const userCred = await signInWithEmailAndPassword(auth, email, password);
+        const user = userCred.user;
+
+        // 嚴格檢查信箱是否已驗證
+        if (!user.emailVerified) {
+          lastUnverifiedCred = { email, password };
+          await signOut(auth);
+          resendVerifyWrap.classList.remove('hidden');
+          showAuthAlert(
+            `⛔ <strong>登入遭阻擋：您的電子信箱尚未完成驗證！</strong><br>請先前往信箱（含<b>「垃圾郵件匣」</b>）點擊驗證連結後再登入。若未收到，可點擊下方按鈕重寄驗證信。`,
+            'error'
+          );
+          return;
+        }
+
+        // 通過驗證，更新 Firestore 登入次數與 RBAC
+        await syncAndUnlockUser(user);
+      } catch (err) {
+        let msg = '帳號或密碼錯誤，請重新確認。';
+        if (err.code === 'auth/too-many-requests') msg = '嘗試次數過多，請稍後再試或重設密碼。';
+        showAuthAlert(`❌ 登入失敗：${msg}`, 'error');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '立即登入系統';
+      }
+    });
+
+    // 重寄驗證信按鈕
+    resendVerifyBtn.addEventListener('click', async () => {
+      if (!lastUnverifiedCred) return;
+      resendVerifyBtn.disabled = true;
+      resendVerifyBtn.textContent = '正在重寄驗證信...';
+      try {
+        const cred = await signInWithEmailAndPassword(auth, lastUnverifiedCred.email, lastUnverifiedCred.password);
+        await sendEmailVerification(cred.user);
+        await signOut(auth);
+        showAuthAlert(
+          `✅ <strong>驗證信已重新發送至 ${lastUnverifiedCred.email}！</strong><br>請至信箱點擊驗證（溫馨提醒：註冊確認信有時會跑到「垃圾郵件匣」，請記得前往確認唷！）`,
+          'success'
+        );
+      } catch (err) {
+        showAuthAlert(`⚠️ 重寄失敗（可能剛寄送過，請稍候再試）：${err.message}`, 'error');
+      } finally {
+        resendVerifyBtn.disabled = false;
+        resendVerifyBtn.textContent = '📧 重新發送驗證信至上述信箱';
+      }
+    });
+
+    // ==========================================
+    // 3. 忘記密碼流程 (含垃圾郵件匣溫馨提醒)
+    // ==========================================
+    forgotForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('forgotEmail').value.trim().toLowerCase();
+      const submitBtn = document.getElementById('forgotSubmitBtn');
+      submitBtn.disabled = true;
+      submitBtn.textContent = '發送中...';
+
+      try {
+        await sendPasswordResetEmail(auth, email);
+        showAuthAlert(
+          `✅ <strong>密碼重設信已發送至 ${email}！</strong><br>💡 <b>溫馨提醒：密碼重設確認信有時會跑到「垃圾郵件匣」，請記得前往確認唷！</b>`,
+          'success'
+        );
+      } catch (err) {
+        showAuthAlert(`❌ 發送失敗：請確認信箱格式是否正確 (${err.message})`, 'error');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '寄送重設密碼信';
+      }
+    });
+
+    // ==========================================
+    // 4. Google 帳號快速登入與 RBAC 同步
+    // ==========================================
+    googleLoginBtn.addEventListener('click', async () => {
+      googleLoginBtn.disabled = true;
+      try {
+        const result = await signInWithPopup(auth, googleProvider);
+        await syncAndUnlockUser(result.user, true);
+      } catch (err) {
+        showAuthAlert(`⚠️ Google 登入未完成：${err.message}`, 'error');
+      } finally {
+        googleLoginBtn.disabled = false;
+      }
+    });
+
+    // 同步使用者 Profile 並執行 RBAC 權限分流
+    async function syncAndUnlockUser(user, isGoogle = false) {
+      if (!user) return;
+      const email = (user.email || '').toLowerCase();
+      const isCreator = email === CREATOR_EMAIL.toLowerCase();
+      const userRef = doc(db, USERS_COL, user.uid);
+      const nowIso = new Date().toISOString();
+
+      try {
+        const snap = await getDoc(userRef);
+        const defaultIdentity = document.getElementById('googleDefaultIdentity')?.value || 'TONY老師學員';
+
+        if (!snap.exists()) {
+          const newProfile = {
+            uid: user.uid,
+            email: email,
+            realName: user.displayName || email.split('@')[0],
+            identity: isCreator ? '系統創作者 (TONY老師)' : defaultIdentity,
+            role: isCreator ? 'admin' : 'user',
+            isCreator: isCreator,
+            createdAt: nowIso,
+            lastLoginAt: nowIso,
+            loginCount: 1
+          };
+          await setDoc(userRef, newProfile);
+          currentUserProfile = newProfile;
+        } else {
+          const existing = snap.data();
+          const updatedRole = isCreator ? 'admin' : (existing.role || 'user');
+          const newCount = (existing.loginCount || 0) + 1;
+          const updates = {
+            lastLoginAt: nowIso,
+            loginCount: newCount,
+            role: updatedRole,
+            isCreator: isCreator
+          };
+          await updateDoc(userRef, updates);
+          currentUserProfile = { ...existing, ...updates };
+        }
+      } catch (err) {
+        // 若 Firestore 尚未開放規則，提供安全記憶體降級確保主程式可進入
+        currentUserProfile = {
+          uid: user.uid,
+          email: email,
+          realName: user.displayName || email.split('@')[0],
+          identity: isCreator ? '系統創作者 (TONY老師)' : 'TONY老師學員',
+          role: isCreator ? 'admin' : 'user',
+          isCreator: isCreator,
+          createdAt: nowIso,
+          loginCount: 1
+        };
+      }
+
+      renderAuthenticatedUI();
+    }
+
+    function renderAuthenticatedUI() {
+      if (!currentUserProfile) return;
+      authGateOverlay.classList.add('hidden');
+      mainAppContainer.classList.remove('hidden');
+      saasUserTopBar.classList.remove('hidden');
+
+      document.getElementById('navUserName').textContent = `${currentUserProfile.realName} (${currentUserProfile.email})`;
+      document.getElementById('navUserIdentityBadge').textContent = currentUserProfile.identity || '一般訪客';
+
+      const roleBadge = document.getElementById('navUserRoleBadge');
+      const adminBtn = document.getElementById('openAdminDashboardBtn');
+
+      if (currentUserProfile.role === 'admin' || currentUserProfile.email === CREATOR_EMAIL) {
+        roleBadge.textContent = currentUserProfile.isCreator ? '👑 系統創作者 (最高管理員)' : '🛡️ ADMIN 管理員';
+        roleBadge.className = "px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40";
+        adminBtn.classList.remove('hidden');
+      } else {
+        roleBadge.textContent = 'USER 會員';
+        roleBadge.className = "px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-800 text-slate-300 border border-slate-700";
+        adminBtn.classList.add('hidden');
+      }
+    }
+
+    // 監聽登入狀態
+    onAuthStateChanged(auth, async (user) => {
+      if (user && (user.emailVerified || user.providerData.some(p => p.providerId === 'google.com'))) {
+        if (!currentUserProfile) {
+          await syncAndUnlockUser(user);
+        }
+      } else {
+        currentUserProfile = null;
+        authGateOverlay.classList.remove('hidden');
+        mainAppContainer.classList.add('hidden');
+        saasUserTopBar.classList.add('hidden');
+      }
+    });
+
+    // 登出按鈕
+    logoutBtn.addEventListener('click', async () => {
+      await signOut(auth);
+      currentUserProfile = null;
+      showAuthAlert('👋 您已安全登出系統。', 'info');
+    });
+
+    // ==========================================
+    // 5. 雲端過關紀錄寫入與個人紀錄查詢
+    // ==========================================
+    window.recordCloudGameHistory = async function(gameStats) {
+      if (!currentUserProfile) return;
+      try {
+        await addDoc(collection(db, HISTORY_COL), {
+          uid: currentUserProfile.uid,
+          email: currentUserProfile.email,
+          realName: currentUserProfile.realName,
+          identity: currentUserProfile.identity,
+          themeTitle: gameStats.themeTitle,
+          matchMode: gameStats.matchMode,
+          difficulty: gameStats.difficulty,
+          moves: gameStats.moves,
+          secondsElapsed: gameStats.secondsElapsed,
+          maxCombo: gameStats.maxCombo,
+          playedAt: new Date().toISOString()
+        });
+      } catch (e) {
+        console.warn('雲端紀錄同步略過:', e);
+      }
+    };
+
+    const myHistoryModal = document.getElementById('myHistoryModal');
+    document.getElementById('openMyHistoryBtn').addEventListener('click', async () => {
+      if (!currentUserProfile) return;
+      myHistoryModal.classList.remove('hidden');
+      myHistoryModal.classList.add('flex');
+      const listEl = document.getElementById('myHistoryList');
+      listEl.innerHTML = `<p class="text-slate-400 text-center py-6">⏳ 正在載入您的雲端挑戰紀錄...</p>`;
+
+      try {
+        const snap = await getDocs(collection(db, HISTORY_COL));
+        const myLogs = [];
+        snap.forEach(d => {
+          const data = d.data();
+          if (data.uid === currentUserProfile.uid || data.email === currentUserProfile.email) {
+            myLogs.push(data);
+          }
+        });
+        myLogs.sort((a, b) => (b.playedAt || '').localeCompare(a.playedAt || ''));
+
+        if (myLogs.length === 0) {
+          listEl.innerHTML = `<p class="text-slate-400 text-center py-6">目前尚無過關紀錄，快完成一局翻牌挑戰吧！</p>`;
+          return;
+        }
+
+        listEl.innerHTML = myLogs.map(log => `
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+            <div>
+              <span class="font-bold text-cyan-300">【${log.themeTitle}】</span>
+              <span class="text-slate-400 ml-1">${log.matchMode} · ${log.difficulty}</span>
+              <p class="text-[11px] text-slate-500 mt-0.5">${formatIsoTime(log.playedAt)}</p>
+            </div>
+            <div class="text-right">
+              <span class="font-bold text-emerald-400">${log.moves} 步</span>
+              <span class="text-slate-400 ml-2">${log.secondsElapsed} 秒</span>
+              <span class="text-amber-400 ml-2">連擊 ${log.maxCombo}x</span>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        listEl.innerHTML = `<p class="text-rose-400 text-center py-4">讀取失敗：${err.message}</p>`;
+      }
+    });
+
+    document.getElementById('closeMyHistoryBtn').addEventListener('click', () => {
+      myHistoryModal.classList.add('hidden');
+      myHistoryModal.classList.remove('flex');
+    });
+
+    // ==========================================
+    // 6. 專屬管理者後台 (Admin Dashboard)
+    // ==========================================
+    const adminDashboardModal = document.getElementById('adminDashboardModal');
+    const adminUsersSection = document.getElementById('adminUsersSection');
+    const adminHistorySection = document.getElementById('adminHistorySection');
+    const adminAiReportSection = document.getElementById('adminAiReportSection');
+    const adminTabUsersBtn = document.getElementById('adminTabUsersBtn');
+    const adminTabHistoryBtn = document.getElementById('adminTabHistoryBtn');
+    const adminTabAiReportBtn = document.getElementById('adminTabAiReportBtn');
+
+    function formatIsoTime(isoStr) {
+      if (!isoStr) return '--';
+      const d = new Date(isoStr);
+      if (isNaN(d.getTime())) return isoStr;
+      return d.toLocaleString('zh-TW', { hour12: false });
+    }
+
+    function setAdminTab(tab) {
+      adminUsersSection.classList.add('hidden');
+      adminHistorySection.classList.add('hidden');
+      adminAiReportSection.classList.add('hidden');
+
+      adminTabUsersBtn.className = "text-xs font-bold px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 transition";
+      adminTabHistoryBtn.className = "text-xs font-bold px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 transition";
+      adminTabAiReportBtn.className = "text-xs font-bold px-4 py-2 rounded-xl bg-indigo-900/80 text-indigo-200 border border-indigo-500/40 hover:bg-indigo-800 transition";
+
+      if (tab === 'users') {
+        adminUsersSection.classList.remove('hidden');
+        adminTabUsersBtn.className = "text-xs font-bold px-4 py-2 rounded-xl bg-amber-500 text-slate-950 transition";
+      } else if (tab === 'history') {
+        adminHistorySection.classList.remove('hidden');
+        adminTabHistoryBtn.className = "text-xs font-bold px-4 py-2 rounded-xl bg-amber-500 text-slate-950 transition";
+      } else if (tab === 'ai_report') {
+        adminAiReportSection.classList.remove('hidden');
+        adminTabAiReportBtn.className = "text-xs font-bold px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow transition";
+      }
+    }
+
+    adminTabUsersBtn.addEventListener('click', () => setAdminTab('users'));
+    adminTabHistoryBtn.addEventListener('click', () => setAdminTab('history'));
+    adminTabAiReportBtn.addEventListener('click', () => setAdminTab('ai_report'));
+
+    document.getElementById('openAdminDashboardBtn').addEventListener('click', () => {
+      adminDashboardModal.classList.remove('hidden');
+      adminDashboardModal.classList.add('flex');
+      // 預設設定報表起訖日期為最近 30 天
+      const today = new Date();
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000);
+      document.getElementById('reportEndDate').value = today.toISOString().split('T')[0];
+      document.getElementById('reportStartDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+      loadAdminAllData();
+    });
+
+    document.getElementById('closeAdminModalBtn').addEventListener('click', () => {
+      adminDashboardModal.classList.add('hidden');
+      adminDashboardModal.classList.remove('flex');
+    });
+
+    document.getElementById('refreshUsersBtn').addEventListener('click', loadAdminAllData);
+
+    async function loadAdminAllData() {
+      const tbodyUsers = document.getElementById('adminUsersTableBody');
+      const tbodyHistory = document.getElementById('adminHistoryTableBody');
+      tbodyUsers.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-slate-400">⏳ 正在從 Firebase 載入最新會員與歷史資料...</td></tr>`;
+
+      try {
+        const usersSnap = await getDocs(collection(db, USERS_COL));
+        cachedAllUsers = [];
+        usersSnap.forEach(docSnap => {
+          cachedAllUsers.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        cachedAllUsers.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        document.getElementById('adminTotalUsersCount').textContent = cachedAllUsers.length;
+        renderAdminUsersTable();
+
+        const historySnap = await getDocs(collection(db, HISTORY_COL));
+        cachedAllHistory = [];
+        historySnap.forEach(docSnap => {
+          cachedAllHistory.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        cachedAllHistory.sort((a, b) => (b.playedAt || '').localeCompare(a.playedAt || ''));
+        document.getElementById('adminTotalLogsCount').textContent = cachedAllHistory.length;
+        renderAdminHistoryTable();
+      } catch (err) {
+        tbodyUsers.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-rose-400">讀取失敗：${err.message}</td></tr>`;
+      }
+    }
+
+    function renderAdminUsersTable() {
+      const tbody = document.getElementById('adminUsersTableBody');
+      if (cachedAllUsers.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-slate-400">目前尚無註冊會員資料</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = cachedAllUsers.map(u => {
+        const isCreator = (u.email || '').toLowerCase() === CREATOR_EMAIL;
+        const isAdmin = isCreator || u.role === 'admin';
+
+        return `
+          <tr class="hover:bg-slate-900/60 transition">
+            <td class="py-3 px-3 font-bold text-white">${u.realName || '--'}</td>
+            <td class="py-3 px-3 text-slate-300">${u.email || '--'}</td>
+            <td class="py-3 px-3">
+              <span class="px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                (u.identity || '').includes('學員')
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                  : 'bg-slate-800 text-slate-300'
+              }">${u.identity || '一般訪客'}</span>
+            </td>
+            <td class="py-3 px-3 text-slate-400">${formatIsoTime(u.createdAt)}</td>
+            <td class="py-3 px-3 text-center font-bold text-emerald-400">${u.loginCount || 1}</td>
+            <td class="py-3 px-3 text-center">
+              ${isCreator
+                ? `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-amber-500/30 text-amber-200 border border-amber-400">👑 系統創作者</span>`
+                : isAdmin
+                  ? `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40">🛡️ Admin</span>`
+                  : `<span class="px-2 py-0.5 rounded-full text-[11px] bg-slate-800 text-slate-400">User</span>`
+              }
+            </td>
+            <td class="py-3 px-3 text-right space-x-1.5">
+              ${isCreator
+                ? `<span class="text-[11px] text-amber-400/80 font-bold">🔒 最高權限永久保護</span>`
+                : `
+                  <button data-action="toggle-role" data-uid="${u.id}" data-role="${isAdmin ? 'user' : 'admin'}"
+                    class="px-2.5 py-1 rounded-lg text-[11px] font-bold ${
+                      isAdmin
+                        ? 'bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30'
+                        : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                    } transition">
+                    ${isAdmin ? '⬇️ 降為 User' : '⬆️ 升為 Admin'}
+                  </button>
+                  <button data-action="delete-user" data-uid="${u.id}" data-name="${u.realName || u.email}"
+                    class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-rose-950 hover:bg-rose-800 text-rose-300 border border-rose-700/50 transition">
+                    🗑️ 刪除
+                  </button>
+                `
+              }
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      // 綁定升降級與刪除事件
+      tbody.querySelectorAll('button[data-action="toggle-role"]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const uid = btn.getAttribute('data-uid');
+          const nextRole = btn.getAttribute('data-role');
+          try {
+            await updateDoc(doc(db, USERS_COL, uid), { role: nextRole });
+            document.getElementById('adminActionToast').textContent = `✅ 已更新會員權限為 ${nextRole.toUpperCase()}`;
+            loadAdminAllData();
+          } catch (err) {
+            showAppNotification(`更新權限失敗：${err.message}`, '錯誤', '❌');
+          }
+        });
+      });
+
+      tbody.querySelectorAll('button[data-action="delete-user"]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const uid = btn.getAttribute('data-uid');
+          const name = btn.getAttribute('data-name');
+          showAppConfirm(`確定要刪除會員「${name}」的資料庫紀錄嗎？此操作無法復原。`, async () => {
+            try {
+              await deleteDoc(doc(db, USERS_COL, uid));
+              document.getElementById('adminActionToast').textContent = `🗑️ 已刪除會員：${name}`;
+              loadAdminAllData();
+            } catch (err) {
+              showAppNotification(`刪除失敗：${err.message}`, '錯誤', '❌');
+            }
+          });
+        });
+      });
+    }
+
+    function renderAdminHistoryTable() {
+      const tbody = document.getElementById('adminHistoryTableBody');
+      if (cachedAllHistory.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-400">目前尚無會員遊戲歷史紀錄</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = cachedAllHistory.map(h => `
+        <tr class="hover:bg-slate-900/60 transition">
+          <td class="py-2.5 px-3 text-slate-400">${formatIsoTime(h.playedAt)}</td>
+          <td class="py-2.5 px-3">
+            <span class="font-bold text-white">${h.realName || '--'}</span>
+            <span class="text-slate-400 block text-[11px]">${h.email || ''}</span>
+          </td>
+          <td class="py-2.5 px-3 text-cyan-300">${h.identity || '--'}</td>
+          <td class="py-2.5 px-3 font-bold text-emerald-300">${h.themeTitle || '--'}</td>
+          <td class="py-2.5 px-3 text-slate-300">${h.matchMode || ''} (${h.difficulty || ''})</td>
+          <td class="py-2.5 px-3 text-center">
+            <span class="text-white font-bold">${h.secondsElapsed || 0}秒</span> /
+            <span class="text-blue-400 font-bold">${h.moves || 0}步</span> /
+            <span class="text-amber-400 font-bold">${h.maxCombo || 0}x</span>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    // ==========================================
+    // 7. 商業數據匯出 CSV (含 \ufeff BOM 防 Excel 中文亂碼)
+    // ==========================================
+    document.getElementById('exportCsvBtn').addEventListener('click', () => {
+      if (cachedAllUsers.length === 0) {
+        showAppNotification('目前無會員資料可匯出！', '提示', '📊');
+        return;
+      }
+
+      const headers = ['真實姓名', '電子信箱', '學員身分', '權限角色', '是否為系統創作者', '登入次數', '註冊時間', '最後登入時間'];
+      const rows = cachedAllUsers.map(u => {
+        const isCreator = (u.email || '').toLowerCase() === CREATOR_EMAIL;
+        return [
+          u.realName || '',
+          u.email || '',
+          u.identity || '',
+          isCreator ? 'admin (系統創作者)' : (u.role || 'user'),
+          isCreator ? '是' : '否',
+          u.loginCount || 1,
+          formatIsoTime(u.createdAt),
+          formatIsoTime(u.lastLoginAt)
+        ].map(val => `"${String(val).replace(/"/g, '""')}"`).join(',');
+      });
+
+      const csvContent = '\ufeff' + [headers.join(','), ...rows].join('\r\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `BrainSpark_SaaS_會員名單_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // ==========================================
+    // 8. AI 區間營運分析報告生成 & 輸出成 WORD (.doc)
+    // ==========================================
+    let latestReportHtml = '';
+
+    document.getElementById('generateAdminAiReportBtn').addEventListener('click', async () => {
+      const startStr = document.getElementById('reportStartDate').value;
+      const endStr = document.getElementById('reportEndDate').value;
+      const previewEl = document.getElementById('adminAiReportPreview');
+      const btn = document.getElementById('generateAdminAiReportBtn');
+
+      if (!startStr || !endStr) {
+        showAppNotification('請選擇完整的起訖日期區間！', '日期設定', '📅');
+        return;
+      }
+
+      const startDate = new Date(startStr + 'T00:00:00');
+      const endDate = new Date(endStr + 'T23:59:59');
+
+      // 篩選區間內的註冊會員與遊戲紀錄
+      const filteredUsers = cachedAllUsers.filter(u => {
+        if (!u.createdAt) return true;
+        const t = new Date(u.createdAt);
+        return t >= startDate && t <= endDate;
+      });
+
+      const filteredHistory = cachedAllHistory.filter(h => {
+        if (!h.playedAt) return true;
+        const t = new Date(h.playedAt);
+        return t >= startDate && t <= endDate;
+      });
+
+      const tonyStudentsCount = filteredUsers.filter(u => (u.identity || '').includes('TONY')).length;
+      const guestCount = filteredUsers.length - tonyStudentsCount;
+      const totalLogins = filteredUsers.reduce((acc, cur) => acc + (cur.loginCount || 1), 0);
+
+      // 基礎統計結構
+      const baseSummaryHtml = `
+        <div style="border-bottom:2px solid #334155;padding-bottom:12px;margin-bottom:14px;">
+          <h2 style="font-size:18px;font-weight:bold;color:#38bdf8;margin:0 0 6px 0;">
+            📊 BrainSpark AI 智創記憶翻牌 — SaaS 商業營運分析報告
+          </h2>
+          <p style="font-size:12px;color:#94a3b8;margin:0;">
+            統計區間：<b>${startStr}</b> 至 <b>${endStr}</b> ｜ 報告產出時間：${new Date().toLocaleString('zh-TW')} ｜ 系統創作者：TONY 楊文澤 老師
+          </p>
+        </div>
+        <div style="margin-bottom:14px;">
+          <h3 style="font-size:14px;font-weight:bold;color:#fbbf24;margin-bottom:6px;">一、區間核心營運指標總覽</h3>
+          <ul style="line-height:1.8;">
+            <li><b>區間新增註冊會員總數：</b> ${filteredUsers.length} 人（全站累計：${cachedAllUsers.length} 人）</li>
+            <li><b>學員身分結構佔比：</b> 🎓 TONY老師學員 ${tonyStudentsCount} 人 ／ 👤 非學員(一般訪客) ${guestCount} 人</li>
+            <li><b>區間會員累計登入總次數：</b> ${totalLogins} 次</li>
+            <li><b>區間完成遊戲過關總局數：</b> ${filteredHistory.length} 局（全站累計：${cachedAllHistory.length} 局）</li>
+          </ul>
+        </div>
+      `;
+
+      btn.disabled = true;
+      btn.textContent = '⏳ AI 正在撰寫深度營運報告...';
+      previewEl.innerHTML = baseSummaryHtml + `<p class="text-indigo-300 animate-pulse">🤖 正在呼叫 Gemini AI 進行用戶行為與商業轉化洞察分析...</p>`;
+
+      try {
+        let aiAnalysisText = '';
+        if (typeof callGeminiAPI === 'function' && localStorage.getItem('tonystudio_brainspark_gemini_key')) {
+          const prompt = `你是一位資深 SaaS 產品營運顧問與數位行銷數據分析師。
+請根據以下「BrainSpark AI 智創記憶翻牌教學系統」在 ${startStr} ~ ${endStr} 的真實營運數據，撰寫一份結構清晰、專業且具商業洞察的分析報告（繁體中文，約 300~450 字）：
+- 區間新增會員數：${filteredUsers.length} 人（其中 TONY老師學員：${tonyStudentsCount} 人，非學員一般訪客：${guestCount} 人）
+- 累計登入活躍次數：${totalLogins} 次
+- 區間完成記憶翻牌局數：${filteredHistory.length} 局
+- 遊戲紀錄樣本：${JSON.stringify(filteredHistory.slice(0, 15).map(h => ({ theme: h.themeTitle, mode: h.matchMode, moves: h.moves, sec: h.secondsElapsed })))}
+
+請包含以下三個段落標題：
+二、會員結構與活躍度深度洞察
+三、教學主題偏好與學習成效分析
+四、下階段課程行銷與學員轉化行動建議`;
+
+          aiAnalysisText = await callGeminiAPI(prompt, false);
+        } else {
+          aiAnalysisText = `【二、會員結構與活躍度深度洞察】
+本統計區間（${startStr} 至 ${endStr}）共計新增 ${filteredUsers.length} 位註冊會員，其中「TONY老師學員」佔 ${tonyStudentsCount} 人，「非學員(一般訪客)」佔 ${guestCount} 人，總計產生 ${totalLogins} 次登入互動。顯示課堂實作與外部自然流量的雙軌導入機制運作穩定。
+
+【三、教學主題偏好與學習成效分析】
+區間內學員共完成 ${filteredHistory.length} 局記憶翻牌挑戰。透過「概念關聯配對（專有名詞 vs. 核心定義）」與「AI 萬物主題生成」，學員能在遊戲化情境中快速建立數位行銷與生成式 AI 的知識連結。
+
+【四、下階段課程行銷與學員轉化行動建議】
+1. 針對高活躍度之「非學員(一般訪客)」，可透過匯出之 CSV 名單發送進階工作坊邀請信，提升學員轉化率。
+2. 若需啟用即時 Gemini 深度客製文字分析，請於主畫面「AI 賦能工坊」設定您的 Gemini API Key 後重新點擊生成。`;
+        }
+
+        const formattedAiHtml = aiAnalysisText
+          .split('\n')
+          .map(line => `<p style="margin:6px 0;line-height:1.75;">${line}</p>`)
+          .join('');
+
+        latestReportHtml = `
+          ${baseSummaryHtml}
+          <div style="margin-top:12px;">
+            ${formattedAiHtml}
+          </div>
+          <hr style="border-color:#334155;margin:16px 0;">
+          <p style="font-size:11px;color:#94a3b8;text-align:right;">
+            @2020 TonyStudio 由TONY 楊文澤 老師設計創作
+          </p>
+        `;
+        previewEl.innerHTML = latestReportHtml;
+      } catch (err) {
+        previewEl.innerHTML = baseSummaryHtml + `<p class="text-rose-400">⚠️ AI 分析連線異常：${err.message}</p>`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '✨ 生成區間 AI 商業營運分析報告';
+      }
+    });
+
+    // 輸出成 WORD 檔 (.doc)
+    document.getElementById('exportWordReportBtn').addEventListener('click', () => {
+      if (!latestReportHtml) {
+        document.getElementById('generateAdminAiReportBtn').click();
+      }
+      const startStr = document.getElementById('reportStartDate').value || 'start';
+      const endStr = document.getElementById('reportEndDate').value || 'end';
+      const contentToExport = latestReportHtml || document.getElementById('adminAiReportPreview').innerHTML;
+
+      const wordDocHtml = `
+        <html xmlns:o='urn:schemas-microsoft-com:office:office'
+              xmlns:w='urn:schemas-microsoft-com:office:word'
+              xmlns='http://www.w3.org/TR/REC-html40'>
+        <head>
+          <meta charset="utf-8">
+          <title>BrainSpark AI 營運分析報告</title>
+          <style>
+            body { font-family: 'Microsoft JhengHei', 'Noto Sans TC', sans-serif; color: #1e293b; line-height: 1.6; padding: 24px; }
+            h2 { color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 8px; }
+            h3 { color: #1d4ed8; margin-top: 16px; }
+            ul { margin-left: 20px; }
+            li { margin-bottom: 6px; }
+            p { margin: 8px 0; }
+          </style>
+        </head>
+        <body>
+          ${contentToExport.replace(/color:#38bdf8/g, 'color:#1d4ed8').replace(/color:#fbbf24/g, 'color:#b45309').replace(/color:#94a3b8/g, 'color:#475569')}
+        </body>
+        </html>
+      `;
+
+      const blob = new Blob(['\ufeff', wordDocHtml], { type: 'application/msword;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `BrainSpark_AI營運分析報告_${startStr}_至_${endStr}.doc`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  </script>
+</body>
+</html>
